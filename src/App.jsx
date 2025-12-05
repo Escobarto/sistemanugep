@@ -48,12 +48,18 @@ import {
   Calendar,
   MapPin,
   MoveRight,
-  MoveLeft
+  MoveLeft,
+  KeyRound
 } from 'lucide-react';
 
 // --- Configuração da API do Gemini ---
 const apiKey = ""; 
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+// --- CÓDIGO MESTRE DA INSTITUIÇÃO ---
+// Este é o código que os novos usuários devem digitar para criar conta.
+// Você pode alterar para qualquer senha que a equipe interna saiba.
+const INSTITUTION_ACCESS_CODE = "NUGEP2025"; 
 
 // --- Estilos de Impressão (PDF) ---
 const printStyles = `
@@ -71,9 +77,14 @@ const printStyles = `
 // --- Componente de Login ---
 const LoginScreen = ({ onLogin }) => {
   const [authMode, setAuthMode] = useState('login'); 
-  const [formData, setFormData] = useState({ username: '', password: '', email: '', regName: '', regPassword: '' });
-  const [verificationCode, setVerificationCode] = useState('');
-  const [inputCode, setInputCode] = useState('');
+  const [formData, setFormData] = useState({ 
+    username: '', 
+    password: '', 
+    email: '', 
+    regName: '', 
+    regPassword: '',
+    accessCode: '' // Novo campo para o código da instituição
+  });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -82,29 +93,44 @@ const LoginScreen = ({ onLogin }) => {
   const handleLogin = (e) => {
     e.preventDefault();
     if (formData.username && formData.password) {
+      // Login simples simulado (aceita qualquer user/pass para demo, mas identifica admin)
       const role = formData.username.toLowerCase().includes('admin') ? 'Administrador' : 'Usuário';
       onLogin({ name: formData.username, role: role, loginTime: new Date() });
     } else { setError('Preencha todos os campos.'); }
   };
 
-  const handleRegisterStart = async (e) => {
+  // Nova Lógica de Cadastro com Validação Institucional
+  const handleRegister = async (e) => {
     e.preventDefault();
-    if (!formData.regName || !formData.email || !formData.regPassword) { setError('Todos os campos são obrigatórios.'); return; }
-    setIsLoading(true);
-    setTimeout(() => {
-      const code = Math.floor(100000 + Math.random() * 900000).toString();
-      setVerificationCode(code);
-      setIsLoading(false);
-      setAuthMode('verification');
-      alert(`🔐 SIMULAÇÃO DE EMAIL\n\nOlá, ${formData.regName}!\nSeu código de verificação do Nugep é: ${code}`);
-    }, 1500);
-  };
+    
+    // Validação de campos vazios
+    if (!formData.regName || !formData.email || !formData.regPassword || !formData.accessCode) { 
+      setError('Todos os campos são obrigatórios.'); 
+      return; 
+    }
 
-  const handleVerifyCode = (e) => {
-    e.preventDefault();
-    if (inputCode === verificationCode) {
-      onLogin({ name: formData.regName, role: 'Usuário', loginTime: new Date(), email: formData.email });
-    } else { setError('Código incorreto.'); }
+    // Validação de formato de email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      setError('Por favor, insira um e-mail válido.');
+      return;
+    }
+
+    setIsLoading(true);
+    
+    // Simulação de processamento
+    setTimeout(() => {
+      // VALIDAÇÃO REAL DO CÓDIGO DA INSTITUIÇÃO
+      if (formData.accessCode === INSTITUTION_ACCESS_CODE) {
+        setIsLoading(false);
+        // Sucesso! Loga o usuário diretamente
+        onLogin({ name: formData.regName, role: 'Usuário', loginTime: new Date(), email: formData.email });
+        alert(`Bem-vindo(a) à equipe, ${formData.regName}!`);
+      } else {
+        setIsLoading(false);
+        setError('Código de Acesso Institucional incorreto. Solicite à chefia.');
+      }
+    }, 1000);
   };
 
   return (
@@ -126,34 +152,39 @@ const LoginScreen = ({ onLogin }) => {
           {authMode === 'login' && (
             <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
               <form onSubmit={handleLogin} className="space-y-4">
-                <div className="relative"><User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} /><input name="username" type="text" className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none text-sm" placeholder="Usuário Institucional" value={formData.username} onChange={handleChange} /></div>
+                <div className="relative"><User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} /><input name="username" type="text" className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none text-sm" placeholder="Usuário" value={formData.username} onChange={handleChange} /></div>
                 <div className="relative"><Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} /><input name="password" type="password" className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none text-sm" placeholder="Senha" value={formData.password} onChange={handleChange} /></div>
                 {error && <p className="text-red-500 text-xs font-bold">{error}</p>}
                 <button type="submit" className="w-full py-3 bg-blue-700 hover:bg-blue-800 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-colors text-sm uppercase tracking-wide"><LogIn size={18} /> Acessar Sistema</button>
               </form>
-              <div className="text-center pt-4 border-t border-slate-100"><button onClick={() => { setAuthMode('register'); setError(''); }} className="text-green-600 font-semibold hover:underline text-sm">Solicitar Acesso (Usuário)</button></div>
+              <div className="text-center pt-4 border-t border-slate-100">
+                <button onClick={() => { setAuthMode('register'); setError(''); }} className="text-green-600 font-semibold hover:underline text-sm">Novo Cadastro (Equipe)</button>
+              </div>
             </div>
           )}
+          
           {authMode === 'register' && (
             <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
                <button onClick={() => { setAuthMode('login'); setError(''); }} className="flex items-center gap-1 text-xs font-bold text-slate-500 hover:text-slate-800 mb-2 uppercase tracking-wide"><ArrowLeft size={14} /> Voltar</button>
-              <form onSubmit={handleRegisterStart} className="space-y-4">
-                <div className="relative"><User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} /><input name="regName" type="text" className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-lg outline-none text-sm focus:ring-2 focus:ring-green-600" placeholder="Usuário" value={formData.regName} onChange={handleChange} /></div>
-                <div className="relative"><Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} /><input name="email" type="email" className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-lg outline-none text-sm focus:ring-2 focus:ring-green-600" placeholder="Email Institucional" value={formData.email} onChange={handleChange} /></div>
-                <div className="relative"><Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} /><input name="regPassword" type="password" className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-lg outline-none text-sm focus:ring-2 focus:ring-green-600" placeholder="Definir Senha" value={formData.regPassword} onChange={handleChange} /></div>
-                {error && <p className="text-red-500 text-xs">{error}</p>}
-                <button type="submit" disabled={isLoading} className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-colors text-sm uppercase">{isLoading ? <Loader2 className="animate-spin" /> : 'Verificar Identidade'}</button>
-              </form>
-            </div>
-          )}
-          {authMode === 'verification' && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300 text-center">
-              <h3 className="text-lg font-bold text-slate-800">Segurança Institucional</h3>
-              <p className="text-sm text-slate-500">Insira o código enviado para <br/><strong>{formData.email}</strong></p>
-              <form onSubmit={handleVerifyCode} className="space-y-6 mt-6">
-                <input type="text" maxLength="6" className="w-48 text-center text-3xl font-mono py-2 border-b-2 border-green-600 outline-none mx-auto block bg-transparent" placeholder="000000" value={inputCode} onChange={(e) => { setInputCode(e.target.value.replace(/[^0-9]/g, '')); setError(''); }} />
-                {error && <p className="text-red-500 text-xs font-bold">{error}</p>}
-                <button type="submit" className="w-full py-3 bg-green-700 hover:bg-green-800 text-white font-bold rounded-lg flex items-center justify-center gap-2 shadow-lg shadow-green-700/20"><CheckCircle size={20} /> Validar Acesso</button>
+              
+              <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 mb-4">
+                <p className="text-xs text-blue-800 flex items-center gap-2"><KeyRound size={14}/> Para criar uma conta, solicite o <b>Código de Acesso</b> à administração do NUGEP.</p>
+              </div>
+
+              <form onSubmit={handleRegister} className="space-y-3">
+                <div className="relative"><User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} /><input name="regName" type="text" className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg outline-none text-sm focus:ring-2 focus:ring-green-600" placeholder="Nome Completo" value={formData.regName} onChange={handleChange} /></div>
+                <div className="relative"><Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} /><input name="email" type="email" className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg outline-none text-sm focus:ring-2 focus:ring-green-600" placeholder="Email Institucional" value={formData.email} onChange={handleChange} /></div>
+                <div className="relative"><Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} /><input name="regPassword" type="password" className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg outline-none text-sm focus:ring-2 focus:ring-green-600" placeholder="Criar Senha" value={formData.regPassword} onChange={handleChange} /></div>
+                
+                {/* Campo de Código Institucional */}
+                <div className="relative pt-2">
+                  <KeyRound className="absolute left-3 top-[60%] -translate-y-1/2 text-orange-500" size={18} />
+                  <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Chave de Segurança</label>
+                  <input name="accessCode" type="text" className="w-full pl-10 pr-4 py-2 border-2 border-orange-100 rounded-lg outline-none text-sm focus:border-orange-500 text-orange-700 font-bold tracking-wider" placeholder="CÓDIGO DA INSTITUIÇÃO" value={formData.accessCode} onChange={handleChange} />
+                </div>
+
+                {error && <p className="text-red-500 text-xs font-bold bg-red-50 p-2 rounded">{error}</p>}
+                <button type="submit" disabled={isLoading} className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-colors text-sm uppercase mt-2 shadow-lg shadow-green-600/20">{isLoading ? <Loader2 className="animate-spin" /> : 'Validar e Cadastrar'}</button>
               </form>
             </div>
           )}
@@ -180,7 +211,7 @@ export default function NugepSys() {
   // Estados Conservação
   const [selectedForConservation, setSelectedForConservation] = useState([]);
 
-  // Estados Exposições (NOVO)
+  // Estados Exposições
   const [exhibitions, setExhibitions] = useState([
     { id: 1, name: "Pós-Impressionismo Hoje", startDate: "2023-01-15", endDate: "2023-06-30", location: "Galeria Principal", curator: "Maria Costa" },
     { id: 2, name: "Modernismo Brasileiro", startDate: "2023-05-10", endDate: "2023-12-20", location: "Sala 2", curator: "João Silva" }
@@ -256,6 +287,32 @@ export default function NugepSys() {
     addLog("EXPOSICAO", `Criou exposição: ${exhibition.name}`);
   };
 
+  // FUNCIONALIDADE: EXCLUIR EXPOSIÇÃO
+  const handleDeleteExhibition = (e, id, name) => {
+    e.stopPropagation(); // Evita abrir a exposição ao clicar no lixo
+    if (window.confirm(`ATENÇÃO: Deseja excluir a exposição "${name}"?\n\nAs obras nela vinculadas retornarão automaticamente ao status 'Armazenado' e ao local 'Reserva Técnica A'.`)) {
+      
+      // 1. Atualizar as obras (Remover vínculo)
+      const updatedArtifacts = artifacts.map(art => {
+        if (art.exhibition === name) {
+          return { 
+            ...art, 
+            exhibition: '', 
+            status: 'Armazenado', 
+            location: 'Reserva Técnica A', // Local padrão de retorno
+            movements: [{ id: Date.now(), date: new Date().toISOString().slice(0,10), type: "Retorno de Exposição (Excluída)", from: name, to: 'Reserva Técnica A', responsible: currentUser.name }, ...art.movements]
+          };
+        }
+        return art;
+      });
+      setArtifacts(updatedArtifacts);
+
+      // 2. Remover a exposição da lista
+      setExhibitions(exhibitions.filter(ex => ex.id !== id));
+      addLog("EXPOSICAO", `Excluiu a exposição: ${name}`);
+    }
+  };
+
   const addArtifactToExhibition = (artifactId, exhibitionName, exhibitionLocation) => {
     const updated = artifacts.map(art => {
       if (art.id === artifactId) {
@@ -280,7 +337,7 @@ export default function NugepSys() {
           ...art, 
           exhibition: '', 
           status: 'Armazenado', 
-          location: 'Reserva Técnica A', // Padrão de retorno, idealmente seria dinâmico
+          location: 'Reserva Técnica A',
           movements: [{ id: Date.now(), date: new Date().toISOString().slice(0,10), type: "Desmontagem Exposição", from: art.location, to: 'Reserva Técnica A', responsible: currentUser.name }, ...art.movements]
         };
       }
@@ -476,7 +533,74 @@ export default function NugepSys() {
             </div>
           )}
 
-          {/* EXPOSIÇÕES (NOVO) */}
+          {/* ACERVO */}
+          {activeTab === 'collection' && (
+            <div className="space-y-4">
+              <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 grid grid-cols-1 md:grid-cols-6 gap-4 items-center">
+                <div className="md:col-span-2 relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                  <input type="text" placeholder="Buscar por título, artista ou registro..." className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-green-500" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                </div>
+                <select className="border border-slate-200 rounded-lg p-2 bg-slate-50 text-sm text-slate-600" value={filters.location} onChange={(e) => setFilters({...filters, location: e.target.value})}>
+                  <option value="">Todas Localizações</option>
+                  {uniqueLocations.map(l => <option key={l} value={l}>{l}</option>)}
+                </select>
+                <select className="border border-slate-200 rounded-lg p-2 bg-slate-50 text-sm text-slate-600" value={filters.type} onChange={(e) => setFilters({...filters, type: e.target.value})}>
+                  <option value="">Todos Tipos</option>
+                  {uniqueTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+                <button onClick={() => {setFilters({location:'', type:'', artist:'', status:''}); setSearchTerm('')}} className="text-slate-400 hover:text-red-500 text-sm font-medium flex items-center justify-center transition-colors"><X size={16}/> Limpar</button>
+                <button onClick={exportToCSV} className="flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm">
+                   <FileSpreadsheet size={16} /> Exportar
+                </button>
+              </div>
+
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead className="bg-slate-50 text-slate-600 text-[10px] uppercase font-bold tracking-wider">
+                      <tr><th className="px-6 py-4">Obra</th><th className="px-6 py-4">Localização & Tipo</th><th className="px-6 py-4">Status</th><th className="px-6 py-4 text-right">Ações</th></tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredArtifacts.map((art) => (
+                        <tr key={art.id} className="hover:bg-green-50/50 cursor-pointer group transition-colors" onClick={() => { setSelectedArtifact(art); setDetailTab('geral'); }}>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-4">
+                              <div className="w-12 h-12 rounded-lg bg-slate-100 overflow-hidden flex-shrink-0 border border-slate-200 relative">
+                                {art.image ? <img src={art.image} alt={art.title} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><ImageIcon size={20} className="text-slate-400"/></div>}
+                                {art.condition !== 'Bom' && <div className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full border-2 border-white"></div>}
+                              </div>
+                              <div>
+                                <p className="font-bold text-slate-800 text-sm group-hover:text-green-700">{art.title}</p>
+                                <p className="text-xs text-slate-500">{art.artist} • {art.year}</p>
+                                {art.relatedTo && <p className="text-[10px] text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded w-fit mt-1.5 flex items-center gap-1 font-medium"><LinkIcon size={8}/> Ficha Vinculada</p>}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex flex-col">
+                              <span className="text-sm font-medium text-slate-700">{art.location}</span>
+                              <span className="text-xs text-slate-400">{art.type}</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border ${art.status === 'Exposto' ? 'bg-green-100 text-green-800 border-green-200' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
+                              {art.status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <button onClick={(e) => { e.stopPropagation(); setSelectedArtifact(art); setDetailTab('geral'); }} className="text-green-600 hover:bg-green-50 p-2 rounded-lg transition-colors"><Maximize2 size={18} /></button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* EXPOSIÇÕES */}
           {activeTab === 'exhibitions' && (
             <div className="space-y-6">
               {!selectedExhibition ? (
@@ -499,7 +623,16 @@ export default function NugepSys() {
                       <div key={ex.id} className="bg-white border border-slate-200 rounded-xl p-6 hover:shadow-lg transition-shadow cursor-pointer group" onClick={() => setSelectedExhibition(ex)}>
                         <div className="flex justify-between items-start mb-4">
                           <span className="bg-blue-100 text-blue-800 text-[10px] font-bold px-2 py-1 rounded uppercase">Exposição</span>
-                          <GalleryVerticalEnd size={20} className="text-slate-400 group-hover:text-blue-600"/>
+                          <div className="flex gap-2">
+                            <button 
+                              onClick={(e) => handleDeleteExhibition(e, ex.id, ex.name)} 
+                              className="text-slate-300 hover:text-red-500 transition-colors" 
+                              title="Excluir Exposição"
+                            >
+                              <Trash2 size={18}/>
+                            </button>
+                            <GalleryVerticalEnd size={20} className="text-slate-400 group-hover:text-blue-600"/>
+                          </div>
                         </div>
                         <h3 className="text-xl font-bold text-slate-800 mb-2">{ex.name}</h3>
                         <div className="space-y-2 text-sm text-slate-500 mb-4">
@@ -616,73 +749,6 @@ export default function NugepSys() {
                   </div>
                 </div>
               )}
-            </div>
-          )}
-
-          {/* ACERVO */}
-          {activeTab === 'collection' && (
-            <div className="space-y-4">
-              <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 grid grid-cols-1 md:grid-cols-6 gap-4 items-center">
-                <div className="md:col-span-2 relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                  <input type="text" placeholder="Buscar por título, artista ou registro..." className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-green-500" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
-                </div>
-                <select className="border border-slate-200 rounded-lg p-2 bg-slate-50 text-sm text-slate-600" value={filters.location} onChange={(e) => setFilters({...filters, location: e.target.value})}>
-                  <option value="">Todas Localizações</option>
-                  {uniqueLocations.map(l => <option key={l} value={l}>{l}</option>)}
-                </select>
-                <select className="border border-slate-200 rounded-lg p-2 bg-slate-50 text-sm text-slate-600" value={filters.type} onChange={(e) => setFilters({...filters, type: e.target.value})}>
-                  <option value="">Todos Tipos</option>
-                  {uniqueTypes.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-                <button onClick={() => {setFilters({location:'', type:'', artist:'', status:''}); setSearchTerm('')}} className="text-slate-400 hover:text-red-500 text-sm font-medium flex items-center justify-center transition-colors"><X size={16}/> Limpar</button>
-                <button onClick={exportToCSV} className="flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm">
-                   <FileSpreadsheet size={16} /> Exportar
-                </button>
-              </div>
-
-              <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left">
-                    <thead className="bg-slate-50 text-slate-600 text-[10px] uppercase font-bold tracking-wider">
-                      <tr><th className="px-6 py-4">Obra</th><th className="px-6 py-4">Localização & Tipo</th><th className="px-6 py-4">Status</th><th className="px-6 py-4 text-right">Ações</th></tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {filteredArtifacts.map((art) => (
-                        <tr key={art.id} className="hover:bg-green-50/50 cursor-pointer group transition-colors" onClick={() => { setSelectedArtifact(art); setDetailTab('geral'); }}>
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-4">
-                              <div className="w-12 h-12 rounded-lg bg-slate-100 overflow-hidden flex-shrink-0 border border-slate-200 relative">
-                                {art.image ? <img src={art.image} alt={art.title} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><ImageIcon size={20} className="text-slate-400"/></div>}
-                                {art.condition !== 'Bom' && <div className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full border-2 border-white"></div>}
-                              </div>
-                              <div>
-                                <p className="font-bold text-slate-800 text-sm group-hover:text-green-700">{art.title}</p>
-                                <p className="text-xs text-slate-500">{art.artist} • {art.year}</p>
-                                {art.relatedTo && <p className="text-[10px] text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded w-fit mt-1.5 flex items-center gap-1 font-medium"><LinkIcon size={8}/> Ficha Vinculada</p>}
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="flex flex-col">
-                              <span className="text-sm font-medium text-slate-700">{art.location}</span>
-                              <span className="text-xs text-slate-400">{art.type}</span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border ${art.status === 'Exposto' ? 'bg-green-100 text-green-800 border-green-200' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
-                              {art.status}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-right">
-                            <button onClick={(e) => { e.stopPropagation(); setSelectedArtifact(art); setDetailTab('geral'); }} className="text-green-600 hover:bg-green-50 p-2 rounded-lg transition-colors"><Maximize2 size={18} /></button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
             </div>
           )}
 
@@ -1208,5 +1274,7 @@ export default function NugepSys() {
         )}
       </main>
     </div>
+  );
+}
   );
 }
