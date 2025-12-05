@@ -49,7 +49,9 @@ import {
   MapPin,
   MoveRight,
   MoveLeft,
-  KeyRound
+  KeyRound,
+  Pencil,
+  FileInput // Ícone para importação
 } from 'lucide-react';
 
 // --- Configuração da API do Gemini ---
@@ -57,8 +59,6 @@ const apiKey = "";
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
 // --- CÓDIGO MESTRE DA INSTITUIÇÃO ---
-// Este é o código que os novos usuários devem digitar para criar conta.
-// Você pode alterar para qualquer senha que a equipe interna saiba.
 const INSTITUTION_ACCESS_CODE = "NUGEP2025"; 
 
 // --- Estilos de Impressão (PDF) ---
@@ -83,7 +83,7 @@ const LoginScreen = ({ onLogin }) => {
     email: '', 
     regName: '', 
     regPassword: '',
-    accessCode: '' // Novo campo para o código da instituição
+    accessCode: '' 
   });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -93,37 +93,26 @@ const LoginScreen = ({ onLogin }) => {
   const handleLogin = (e) => {
     e.preventDefault();
     if (formData.username && formData.password) {
-      // Login simples simulado (aceita qualquer user/pass para demo, mas identifica admin)
       const role = formData.username.toLowerCase().includes('admin') ? 'Administrador' : 'Usuário';
       onLogin({ name: formData.username, role: role, loginTime: new Date() });
     } else { setError('Preencha todos os campos.'); }
   };
 
-  // Nova Lógica de Cadastro com Validação Institucional
   const handleRegister = async (e) => {
     e.preventDefault();
-    
-    // Validação de campos vazios
     if (!formData.regName || !formData.email || !formData.regPassword || !formData.accessCode) { 
       setError('Todos os campos são obrigatórios.'); 
       return; 
     }
-
-    // Validação de formato de email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.email)) {
       setError('Por favor, insira um e-mail válido.');
       return;
     }
-
     setIsLoading(true);
-    
-    // Simulação de processamento
     setTimeout(() => {
-      // VALIDAÇÃO REAL DO CÓDIGO DA INSTITUIÇÃO
       if (formData.accessCode === INSTITUTION_ACCESS_CODE) {
         setIsLoading(false);
-        // Sucesso! Loga o usuário diretamente
         onLogin({ name: formData.regName, role: 'Usuário', loginTime: new Date(), email: formData.email });
         alert(`Bem-vindo(a) à equipe, ${formData.regName}!`);
       } else {
@@ -136,7 +125,6 @@ const LoginScreen = ({ onLogin }) => {
   return (
     <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 font-sans">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden relative">
-        {/* Header Colorido Nugep */}
         <div className="bg-gradient-to-r from-green-600 via-blue-600 to-orange-500 p-1">
            <div className="bg-slate-900 p-8 text-center relative overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-full opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
@@ -176,7 +164,6 @@ const LoginScreen = ({ onLogin }) => {
                 <div className="relative"><Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} /><input name="email" type="email" className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg outline-none text-sm focus:ring-2 focus:ring-green-600" placeholder="Email Institucional" value={formData.email} onChange={handleChange} /></div>
                 <div className="relative"><Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} /><input name="regPassword" type="password" className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg outline-none text-sm focus:ring-2 focus:ring-green-600" placeholder="Criar Senha" value={formData.regPassword} onChange={handleChange} /></div>
                 
-                {/* Campo de Código Institucional */}
                 <div className="relative pt-2">
                   <KeyRound className="absolute left-3 top-[60%] -translate-y-1/2 text-orange-500" size={18} />
                   <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Chave de Segurança</label>
@@ -203,6 +190,10 @@ export default function NugepSys() {
   const [systemLogs, setSystemLogs] = useState([]);
   const [selectedArtifact, setSelectedArtifact] = useState(null);
   const [detailTab, setDetailTab] = useState('geral');
+  const fileInputRef = useRef(null); // Referência para o input de arquivo
+
+  // Estados de Edição
+  const [isEditing, setIsEditing] = useState(false);
 
   // Estados Movimentação
   const [isMovementModalOpen, setIsMovementModalOpen] = useState(false);
@@ -214,7 +205,8 @@ export default function NugepSys() {
   // Estados Exposições
   const [exhibitions, setExhibitions] = useState([
     { id: 1, name: "Pós-Impressionismo Hoje", startDate: "2023-01-15", endDate: "2023-06-30", location: "Galeria Principal", curator: "Maria Costa" },
-    { id: 2, name: "Modernismo Brasileiro", startDate: "2023-05-10", endDate: "2023-12-20", location: "Sala 2", curator: "João Silva" }
+    { id: 2, name: "Modernismo Brasileiro", startDate: "2023-05-10", endDate: "2023-12-20", location: "Sala 2", curator: "João Silva" },
+    { id: 3, name: "Passado Histórico (Exemplo Antigo)", startDate: "2010-01-01", endDate: "2010-12-31", location: "Galeria Principal", curator: "Curador Antigo" }
   ]);
   const [selectedExhibition, setSelectedExhibition] = useState(null);
   const [newExhibition, setNewExhibition] = useState({ name: '', startDate: '', endDate: '', location: '', curator: '' });
@@ -225,11 +217,9 @@ export default function NugepSys() {
   const [analysisResult, setAnalysisResult] = useState(null); 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isGeneratingDesc, setIsGeneratingDesc] = useState(false);
-  const [chatInput, setChatInput] = useState('');
-  const [isChatLoading, setIsChatLoading] = useState(false);
   const [tempCustomField, setTempCustomField] = useState({ label: '', value: '' });
 
-  // Dados do Acervo (com queue de conservação)
+  // Dados do Acervo
   const [artifacts, setArtifacts] = useState([
     { 
       id: 1, regNumber: "P-1889-001", title: "A Noite Estrelada", artist: "Vincent van Gogh", year: 1889, type: "Pintura", 
@@ -272,9 +262,59 @@ export default function NugepSys() {
 
   const exportToCSV = () => {
     addLog("EXPORT", "Exportou planilha completa do acervo");
-    const headers = ["ID", "Nº Registro", "Título", "Artista", "Ano", "Tipo", "Status", "Localização", "Exposição"];
-    const csvContent = [headers.join(","), ...artifacts.map(a => [a.id, `"${a.regNumber}"`, `"${a.title}"`, `"${a.artist}"`, a.year, a.type, a.status, `"${a.location}"`, `"${a.exhibition || ''}"`].join(","))].join("\n");
+    const headers = ["ID", "Nº Registro", "Título", "Artista", "Ano", "Tipo", "Status", "Localização", "Condição", "Descrição"];
+    const csvContent = [headers.join(","), ...artifacts.map(a => [a.id, `"${a.regNumber}"`, `"${a.title}"`, `"${a.artist}"`, a.year, a.type, a.status, `"${a.location}"`, a.condition, `"${a.description}"`].join(","))].join("\n");
     const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })); link.download = `nugep_acervo_${new Date().toISOString().slice(0,10)}.csv`; document.body.appendChild(link); link.click(); document.body.removeChild(link);
+  };
+
+  // --- Função de IMPORTAÇÃO CSV ---
+  const handleCSVImport = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target.result;
+      const lines = text.split('\n');
+      
+      // Remove cabeçalho e linhas vazias
+      const dataLines = lines.slice(1).filter(line => line.trim() !== '');
+      
+      const importedArtifacts = dataLines.map((line, index) => {
+        // Separação simples por vírgula (considerando aspas simples para simplificação neste exemplo)
+        // Ordem esperada: Nº Registro, Título, Artista, Ano, Tipo, Status, Localização, Condição, Descrição
+        // Remove aspas extras se existirem
+        const cols = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(col => col.trim().replace(/^"|"$/g, ''));
+        
+        return {
+          id: Date.now() + index, // ID único sequencial
+          regNumber: cols[0] || `IMP-${Date.now()}-${index}`,
+          title: cols[1] || 'Sem Título',
+          artist: cols[2] || 'Desconhecido',
+          year: cols[3] || 'S/D',
+          type: cols[4] || 'Outros',
+          status: cols[5] || 'Armazenado',
+          location: cols[6] || 'Reserva Técnica',
+          condition: cols[7] || 'Bom',
+          description: cols[8] || '',
+          exhibition: '',
+          conservationQueue: null,
+          image: '', // Importação CSV simples não lida com imagens binárias
+          observations: 'Importado via CSV',
+          createdBy: currentUser.name,
+          createdAt: new Date().toISOString(),
+          customFields: [],
+          movements: [{ id: Date.now() + index, date: new Date().toISOString().slice(0,10), type: "Importação em Massa", from: "Externo", to: cols[6] || 'Reserva Técnica', responsible: currentUser.name }],
+          interventions: []
+        };
+      });
+
+      setArtifacts(prev => [...prev, ...importedArtifacts]);
+      addLog("IMPORT", `Importou ${importedArtifacts.length} fichas via CSV`);
+      alert(`Sucesso! ${importedArtifacts.length} novas obras foram adicionadas ao acervo.`);
+      if (fileInputRef.current) fileInputRef.current.value = ""; // Limpa o input
+    };
+    reader.readAsText(file);
   };
 
   // --- LÓGICA DE EXPOSIÇÕES ---
@@ -287,47 +327,53 @@ export default function NugepSys() {
     addLog("EXPOSICAO", `Criou exposição: ${exhibition.name}`);
   };
 
-  // FUNCIONALIDADE: EXCLUIR EXPOSIÇÃO
   const handleDeleteExhibition = (e, id, name) => {
-    e.stopPropagation(); // Evita abrir a exposição ao clicar no lixo
-    if (window.confirm(`ATENÇÃO: Deseja excluir a exposição "${name}"?\n\nAs obras nela vinculadas retornarão automaticamente ao status 'Armazenado' e ao local 'Reserva Técnica A'.`)) {
-      
-      // 1. Atualizar as obras (Remover vínculo)
+    e.stopPropagation();
+    if (window.confirm(`ATENÇÃO: Deseja excluir a exposição "${name}"?\n\nAs obras nela vinculadas retornarão automaticamente ao status 'Armazenado'.`)) {
       const updatedArtifacts = artifacts.map(art => {
         if (art.exhibition === name) {
           return { 
             ...art, 
             exhibition: '', 
             status: 'Armazenado', 
-            location: 'Reserva Técnica A', // Local padrão de retorno
+            location: 'Reserva Técnica A', 
             movements: [{ id: Date.now(), date: new Date().toISOString().slice(0,10), type: "Retorno de Exposição (Excluída)", from: name, to: 'Reserva Técnica A', responsible: currentUser.name }, ...art.movements]
           };
         }
         return art;
       });
       setArtifacts(updatedArtifacts);
-
-      // 2. Remover a exposição da lista
       setExhibitions(exhibitions.filter(ex => ex.id !== id));
       addLog("EXPOSICAO", `Excluiu a exposição: ${name}`);
     }
   };
 
-  const addArtifactToExhibition = (artifactId, exhibitionName, exhibitionLocation) => {
+  // Lógica de Vincular Obra a Exposição (Com verificação de data)
+  const addArtifactToExhibition = (artifactId, exhibition) => {
+    const today = new Date().toISOString().slice(0,10);
+    // Verifica se a exposição está acontecendo hoje
+    const isActive = exhibition.startDate <= today && exhibition.endDate >= today;
+
     const updated = artifacts.map(art => {
       if (art.id === artifactId) {
-        return { 
-          ...art, 
-          exhibition: exhibitionName, 
-          status: 'Exposto', 
-          location: exhibitionLocation,
-          movements: [{ id: Date.now(), date: new Date().toISOString().slice(0,10), type: "Montagem Exposição", from: art.location, to: exhibitionLocation, responsible: currentUser.name }, ...art.movements]
-        };
+        let updates = { exhibition: exhibition.name }; // Sempre vincula o nome para histórico
+        
+        if (isActive) {
+           // Se a exposição está ativa, muda status e localização
+           updates.status = 'Exposto';
+           updates.location = exhibition.location;
+           updates.movements = [{ id: Date.now(), date: today, type: "Montagem Exposição", from: art.location, to: exhibition.location, responsible: currentUser.name }, ...art.movements];
+           alert(`Obra adicionada à exposição ativa!\nStatus atualizado para: Exposto\nLocal: ${exhibition.location}`);
+        } else {
+           // Se a exposição já passou ou é futura, apenas vincula o nome no registro, não muda status físico
+           alert(`Obra vinculada ao registro da exposição "${exhibition.name}".\n\nATENÇÃO: Como a exposição não está ativa (Data atual fora do período), o status da obra NÃO foi alterado para 'Exposto'.`);
+        }
+        return { ...art, ...updates };
       }
       return art;
     });
     setArtifacts(updated);
-    addLog("EXPOSICAO", `Adicionou obra ${artifactId} à exposição ${exhibitionName}`);
+    addLog("EXPOSICAO", `Vinculou obra ${artifactId} à exposição ${exhibition.name} (${isActive ? 'Ativa' : 'Histórico'})`);
   };
 
   const removeArtifactFromExhibition = (artifactId) => {
@@ -391,16 +437,69 @@ export default function NugepSys() {
 
   // --- Demais Funções ---
   const handlePrintCard = () => { addLog("EXPORT_FICHA", `Imprimiu ficha: ${selectedArtifact.regNumber}`); window.print(); };
+  
   const handleRunAnalysis = async (e) => {
     e.preventDefault(); if (!analysisInput.trim()) return; setIsAnalyzing(true);
     const context = JSON.stringify(artifacts.map(a => ({ title: a.title, year: a.year, type: a.type, status: a.status, condition: a.condition })));
     const prompt = `Analista NUGEP. Acervo JSON: ${context}. Pergunta: "${analysisInput}". JSON: {"text": "texto corrido", "chartData": [{"label": "A", "value": 10, "color": "bg-orange-500"}], "chartTitle": "Titulo"}.`;
     try { let resultText = await callGemini(prompt); resultText = resultText.replace(/```json/g, '').replace(/```/g, ''); setAnalysisResult(JSON.parse(resultText)); } catch (err) { alert("Erro ao gerar análise."); } setIsAnalyzing(false);
   };
+  
   const addCustomField = () => { if (tempCustomField.label && tempCustomField.value) { setNewArtifact(prev => ({ ...prev, customFields: [...prev.customFields, tempCustomField] })); setTempCustomField({ label: '', value: '' }); } };
   const removeCustomField = (idx) => setNewArtifact(prev => ({ ...prev, customFields: prev.customFields.filter((_, i) => i !== idx) }));
+  
   const handleImageUpload = (e) => { const file = e.target.files[0]; if (file) { const reader = new FileReader(); reader.onloadend = () => setNewArtifact(prev => ({ ...prev, image: reader.result })); reader.readAsDataURL(file); } };
-  const handleAddArtifact = (e) => { e.preventDefault(); const artifact = { ...newArtifact, id: Date.now(), createdBy: currentUser.name, createdAt: new Date().toISOString(), movements: [{ date: new Date().toISOString().slice(0,10), type: "Entrada Inicial", from: "Externo", to: newArtifact.location, responsible: currentUser.name }], interventions: [] }; setArtifacts([...artifacts, artifact]); addLog("CADASTRO", `Nova ficha: ${artifact.title}`); setNewArtifact({ regNumber: '', title: '', artist: '', year: '', type: 'Pintura', status: 'Armazenado', condition: 'Bom', location: 'Reserva Técnica A', exhibition: '', image: '', description: '', observations: '', customFields: [], relatedTo: '', provenance: '', copyright: '', audioDesc: '' }); setActiveTab('collection'); alert("Ficha catalogada com sucesso!"); };
+  
+  // Função para abrir o modo de edição
+  const handleEditArtifact = (artifact) => {
+    setNewArtifact(artifact); // Carrega os dados da obra no formulário
+    setIsEditing(true); // Ativa modo de edição
+    setActiveTab('add'); // Vai para a aba de cadastro/edição
+    setSelectedArtifact(null); // Fecha o modal de detalhes se estiver aberto
+  };
+
+  // Função para salvar (Criar ou Editar)
+  const handleSaveArtifact = (e) => { 
+    e.preventDefault(); 
+    
+    if (isEditing) {
+      // Lógica de Edição
+      const updatedArtifacts = artifacts.map(art => {
+        if (art.id === newArtifact.id) {
+          return { ...art, ...newArtifact }; // Atualiza com os novos dados
+        }
+        return art;
+      });
+      setArtifacts(updatedArtifacts);
+      addLog("EDICAO", `Editou ficha: ${newArtifact.title}`);
+      alert("Ficha atualizada com sucesso!");
+    } else {
+      // Lógica de Criação
+      const artifact = { 
+        ...newArtifact, 
+        id: Date.now(), 
+        createdBy: currentUser.name, 
+        createdAt: new Date().toISOString(), 
+        movements: [{ date: new Date().toISOString().slice(0,10), type: "Entrada Inicial", from: "Externo", to: newArtifact.location, responsible: currentUser.name }], 
+        interventions: [] 
+      }; 
+      setArtifacts([...artifacts, artifact]); 
+      addLog("CADASTRO", `Nova ficha: ${artifact.title}`);
+      alert("Ficha catalogada com sucesso!"); 
+    }
+
+    // Resetar formulário
+    setNewArtifact({ regNumber: '', title: '', artist: '', year: '', type: 'Pintura', status: 'Armazenado', condition: 'Bom', location: 'Reserva Técnica A', exhibition: '', image: '', description: '', observations: '', customFields: [], relatedTo: '', provenance: '', copyright: '', audioDesc: '' }); 
+    setIsEditing(false);
+    setActiveTab('collection'); 
+  };
+  
+  const handleCancelEdit = () => {
+    setNewArtifact({ regNumber: '', title: '', artist: '', year: '', type: 'Pintura', status: 'Armazenado', condition: 'Bom', location: 'Reserva Técnica A', exhibition: '', image: '', description: '', observations: '', customFields: [], relatedTo: '', provenance: '', copyright: '', audioDesc: '' });
+    setIsEditing(false);
+    setActiveTab('collection');
+  };
+
   const handleDelete = (id, title) => { if (currentUser.role !== 'Administrador') { return alert("Apenas Administradores podem arquivar."); } if (window.confirm("Arquivar?")) { setArtifacts(artifacts.filter(a => a.id !== id)); setSelectedArtifact(null); addLog("REMOCAO", `Arquivou: ${title}`); } };
   const handleGenerateDescription = async () => { if (!newArtifact.title) return alert("Preencha o título."); setIsGeneratingDesc(true); const desc = await callGemini(`Descrição técnica (PT-BR) para: "${newArtifact.title}" de "${newArtifact.artist}".`); if (desc) setNewArtifact(prev => ({ ...prev, description: desc })); setIsGeneratingDesc(false); };
   
@@ -448,7 +547,7 @@ export default function NugepSys() {
           </button>
           
           <div className="pt-4 pb-1 px-4 text-[10px] uppercase font-bold text-slate-500 tracking-wider">Operacional</div>
-          <button onClick={() => setActiveTab('add')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'add' ? 'bg-orange-600 text-white shadow-md' : 'hover:bg-orange-900/50 hover:text-white'}`}>
+          <button onClick={() => { setActiveTab('add'); setIsEditing(false); setNewArtifact({ regNumber: '', title: '', artist: '', year: '', type: 'Pintura', status: 'Armazenado', condition: 'Bom', location: 'Reserva Técnica A', exhibition: '', image: '', description: '', observations: '', customFields: [], relatedTo: '', provenance: '', copyright: '', audioDesc: '' }); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'add' ? 'bg-orange-600 text-white shadow-md' : 'hover:bg-orange-900/50 hover:text-white'}`}>
             <PlusCircle size={18} className={activeTab === 'add' ? "text-white" : "text-orange-500"}/> <span className="text-sm font-medium">Cadastrar Ficha</span>
           </button>
           <button onClick={() => setActiveTab('analysis')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'analysis' ? 'bg-indigo-600 text-white shadow-md' : 'hover:bg-indigo-900/50 hover:text-white'}`}>
@@ -473,7 +572,7 @@ export default function NugepSys() {
             {activeTab === 'dashboard' && <><LayoutDashboard className="text-blue-600"/> Painel de Gestão</>}
             {activeTab === 'collection' && <><BookOpen className="text-green-600"/> Acervo Museológico</>}
             {activeTab === 'exhibitions' && <><GalleryVerticalEnd className="text-blue-600"/> Gestão de Exposições</>}
-            {activeTab === 'add' && <><PlusCircle className="text-orange-600"/> Catalogação</>}
+            {activeTab === 'add' && <><PlusCircle className="text-orange-600"/> {isEditing ? 'Editar Ficha' : 'Catalogação'}</>}
             {activeTab === 'audit' && <><History className="text-slate-600"/> Registro de Auditoria</>}
             {activeTab === 'movements' && <><Truck className="text-yellow-600"/> Gestão de Movimentações</>}
             {activeTab === 'conservation' && <><Stethoscope className="text-red-600"/> Laboratório de Conservação</>}
@@ -549,10 +648,26 @@ export default function NugepSys() {
                   <option value="">Todos Tipos</option>
                   {uniqueTypes.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
-                <button onClick={() => {setFilters({location:'', type:'', artist:'', status:''}); setSearchTerm('')}} className="text-slate-400 hover:text-red-500 text-sm font-medium flex items-center justify-center transition-colors"><X size={16}/> Limpar</button>
-                <button onClick={exportToCSV} className="flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm">
-                   <FileSpreadsheet size={16} /> Exportar
-                </button>
+                <div className="flex gap-2 justify-end col-span-2 md:col-span-1 md:col-start-6">
+                  <button onClick={() => {setFilters({location:'', type:'', artist:'', status:''}); setSearchTerm('')}} className="text-slate-400 hover:text-red-500 p-2 rounded-full transition-colors" title="Limpar Filtros"><X size={16}/></button>
+                  
+                  {/* Botão de Exportar */}
+                  <button onClick={exportToCSV} className="text-green-600 hover:bg-green-50 p-2 rounded-lg transition-colors border border-green-200" title="Exportar CSV">
+                     <FileSpreadsheet size={18} />
+                  </button>
+
+                  {/* Botão de Importar */}
+                  <input 
+                    type="file" 
+                    accept=".csv" 
+                    className="hidden" 
+                    ref={fileInputRef}
+                    onChange={handleCSVImport}
+                  />
+                  <button onClick={() => fileInputRef.current.click()} className="text-blue-600 hover:bg-blue-50 p-2 rounded-lg transition-colors border border-blue-200" title="Importar CSV">
+                     <FileInput size={18} />
+                  </button>
+                </div>
               </div>
 
               <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
@@ -589,7 +704,10 @@ export default function NugepSys() {
                             </span>
                           </td>
                           <td className="px-6 py-4 text-right">
-                            <button onClick={(e) => { e.stopPropagation(); setSelectedArtifact(art); setDetailTab('geral'); }} className="text-green-600 hover:bg-green-50 p-2 rounded-lg transition-colors"><Maximize2 size={18} /></button>
+                            <div className="flex justify-end gap-2">
+                              <button onClick={(e) => { e.stopPropagation(); handleEditArtifact(art); }} className="text-blue-500 hover:bg-blue-50 p-2 rounded-lg transition-colors" title="Editar Ficha"><Pencil size={18}/></button>
+                              <button onClick={(e) => { e.stopPropagation(); setSelectedArtifact(art); setDetailTab('geral'); }} className="text-green-600 hover:bg-green-50 p-2 rounded-lg transition-colors"><Maximize2 size={18} /></button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -674,7 +792,7 @@ export default function NugepSys() {
                               </div>
                               <div>
                                 <p className="text-sm font-bold text-slate-700">{art.title}</p>
-                                <p className="text-xs text-slate-500">{art.regNumber}</p>
+                                <p className="text-xs text-slate-500">{art.regNumber} • {art.status}</p>
                               </div>
                             </div>
                             <button 
@@ -705,7 +823,7 @@ export default function NugepSys() {
                         {artifacts.filter(a => !a.exhibition && a.location !== 'Externo').map(art => (
                           <div key={art.id} className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm flex justify-between items-center group opacity-80 hover:opacity-100">
                             <button 
-                              onClick={() => addArtifactToExhibition(art.id, selectedExhibition.name, selectedExhibition.location)}
+                              onClick={() => addArtifactToExhibition(art.id, selectedExhibition)}
                               className="p-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 mr-2"
                               title="Adicionar à exposição"
                             >
@@ -952,11 +1070,17 @@ export default function NugepSys() {
             </div>
           )}
 
-          {/* CATALOGAÇÃO */}
+          {/* CATALOGAÇÃO / EDIÇÃO */}
           {activeTab === 'add' && (
             <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-sm border border-slate-200 p-8">
-              <h2 className="text-2xl font-bold text-slate-800 mb-6">Cadastrar Nova Ficha</h2>
-              <form onSubmit={handleAddArtifact} className="space-y-8">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-slate-800">{isEditing ? `Editando Ficha: ${newArtifact.title}` : 'Cadastrar Nova Ficha'}</h2>
+                {isEditing && (
+                  <button onClick={handleCancelEdit} className="text-sm text-red-600 hover:underline">Cancelar Edição</button>
+                )}
+              </div>
+
+              <form onSubmit={handleSaveArtifact} className="space-y-8">
                 
                 <div>
                   <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 border-b pb-2">Identificação & Procedência</h3>
@@ -1079,8 +1203,8 @@ export default function NugepSys() {
                 </div>
 
                 <div className="pt-4 flex justify-end gap-3 border-t border-slate-100">
-                  <button type="button" onClick={() => setActiveTab('collection')} className="px-6 py-2 border border-slate-300 rounded-lg text-slate-600 hover:bg-slate-50 font-medium">Cancelar</button>
-                  <button type="submit" className="px-6 py-2 bg-orange-600 rounded-lg text-white hover:bg-orange-700 font-medium shadow-lg shadow-orange-600/20">Salvar Ficha</button>
+                  <button type="button" onClick={handleCancelEdit} className="px-6 py-2 border border-slate-300 rounded-lg text-slate-600 hover:bg-slate-50 font-medium">Cancelar</button>
+                  <button type="submit" className="px-6 py-2 bg-orange-600 rounded-lg text-white hover:bg-orange-700 font-medium shadow-lg shadow-orange-600/20">{isEditing ? 'Salvar Alterações' : 'Cadastrar Ficha'}</button>
                 </div>
               </form>
             </div>
@@ -1139,6 +1263,8 @@ export default function NugepSys() {
                   <p className="text-lg text-slate-500 font-serif italic mt-1">{selectedArtifact.artist}, {selectedArtifact.year}</p>
                 </div>
                 <div className="flex gap-2 no-print">
+                   {/* Botão de Edição no Modal */}
+                  <button onClick={() => handleEditArtifact(selectedArtifact)} className="p-2 bg-blue-100 hover:bg-blue-200 rounded-full text-blue-700" title="Editar Ficha"><Pencil size={20}/></button>
                   <button onClick={() => alert("Gerando QR Code para: " + selectedArtifact.regNumber)} className="p-2 hover:bg-slate-200 rounded-full text-slate-600" title="Gerar QR Code"><QrCode size={20}/></button>
                   <button onClick={handlePrintCard} className="p-2 hover:bg-slate-200 rounded-full text-slate-600" title="Imprimir Ficha"><Printer size={20}/></button>
                   <button onClick={() => setSelectedArtifact(null)} className="p-2 hover:bg-slate-200 rounded-full text-slate-600"><X size={20}/></button>
