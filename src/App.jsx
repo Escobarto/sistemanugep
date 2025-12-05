@@ -1276,5 +1276,3 @@ export default function NugepSys() {
     </div>
   );
 }
-  );
-}
