@@ -471,21 +471,55 @@ export default function NugepSys() {
     addLog("EXPOSICAO", `Removeu obra ${artifactId} da exposição ${exhibitionName || 'Atual'}`);
   };
 
-  // --- LÓGICA DE MOVIMENTAÇÃO ---
+  // --- LÓGICA DE MOVIMENTAÇÃO (ATUALIZADA) ---
   const handleRegisterMovement = (e) => {
     e.preventDefault();
     if (!newMovement.artifactId) return alert("Selecione uma obra.");
+    
     const updatedArtifacts = artifacts.map(art => {
       if (art.id == newMovement.artifactId) {
         let newLocation = art.location;
         let newStatus = art.status;
-        if (newMovement.type === 'Trânsito Interno') newLocation = newMovement.to;
-        if (newMovement.type === 'Saída' || newMovement.type === 'Empréstimo (Saída)') { newLocation = 'Externo'; newStatus = 'Empréstimo'; }
-        if (newMovement.type === 'Entrada' || newMovement.type === 'Empréstimo (Entrada)') newLocation = newMovement.to;
-        return { ...art, location: newLocation, status: newStatus, movements: [{ ...newMovement, id: Date.now() }, ...art.movements] };
+        const dest = newMovement.to;
+
+        switch (newMovement.type) {
+          case 'Trânsito Interno':
+            if (dest) newLocation = dest;
+            break;
+          case 'Empréstimo (Saída)':
+          case 'Saída': 
+            newLocation = 'Externo'; 
+            newStatus = 'Empréstimo'; 
+            break;
+          case 'Empréstimo (Entrada)':
+          case 'Entrada': // Entende-se 'Entrada' como retorno de empréstimo ou doação
+            if (dest) newLocation = dest;
+            newStatus = 'Armazenado'; 
+            break;
+          case 'Saída para Restauro':
+            newLocation = 'Laboratório de Restauro'; 
+            newStatus = 'Em Restauração';
+            if (dest) newLocation = dest; // Permite override se for para um laboratório externo específico
+            break;
+          case 'Retorno de Restauro':
+            if (dest) newLocation = dest;
+            newStatus = 'Armazenado'; 
+            break;
+          default:
+            if (dest) newLocation = dest;
+            break;
+        }
+
+        return { 
+            ...art, 
+            location: newLocation, 
+            status: newStatus, 
+            movements: [{ ...newMovement, id: Date.now(), to: newLocation }, ...art.movements] 
+        };
       }
       return art;
     });
+
     setArtifacts(updatedArtifacts);
     addLog("MOVIMENTACAO", `${newMovement.type} da obra ID ${newMovement.artifactId}`);
     setIsMovementModalOpen(false);
