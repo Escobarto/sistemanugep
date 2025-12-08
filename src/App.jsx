@@ -51,7 +51,8 @@ import {
   MoveLeft,
   KeyRound,
   Pencil,
-  FileInput // Ícone para importação
+  FileInput,
+  List // Ícone novo para listar histórico
 } from 'lucide-react';
 
 // --- Configuração da API do Gemini ---
@@ -190,7 +191,7 @@ export default function NugepSys() {
   const [systemLogs, setSystemLogs] = useState([]);
   const [selectedArtifact, setSelectedArtifact] = useState(null);
   const [detailTab, setDetailTab] = useState('geral');
-  const fileInputRef = useRef(null); // Referência para o input de arquivo
+  const fileInputRef = useRef(null); 
 
   // Estados de Edição
   const [isEditing, setIsEditing] = useState(false);
@@ -204,7 +205,7 @@ export default function NugepSys() {
 
   // Estados Exposições
   const [exhibitions, setExhibitions] = useState([
-    { id: 1, name: "Pós-Impressionismo Hoje", startDate: "2023-01-15", endDate: "2023-06-30", location: "Galeria Principal", curator: "Maria Costa" },
+    { id: 1, name: "Pós-Impressionismo Hoje", startDate: "2023-01-15", endDate: "2025-06-30", location: "Galeria Principal", curator: "Maria Costa" },
     { id: 2, name: "Modernismo Brasileiro", startDate: "2023-05-10", endDate: "2023-12-20", location: "Sala 2", curator: "João Silva" },
     { id: 3, name: "Passado Histórico (Exemplo Antigo)", startDate: "2010-01-01", endDate: "2010-12-31", location: "Galeria Principal", curator: "Curador Antigo" }
   ]);
@@ -219,11 +220,18 @@ export default function NugepSys() {
   const [isGeneratingDesc, setIsGeneratingDesc] = useState(false);
   const [tempCustomField, setTempCustomField] = useState({ label: '', value: '' });
 
-  // Dados do Acervo
+  // Dados do Acervo (Inicial)
   const [artifacts, setArtifacts] = useState([
     { 
       id: 1, regNumber: "P-1889-001", title: "A Noite Estrelada", artist: "Vincent van Gogh", year: 1889, type: "Pintura", 
-      status: "Exposto", condition: "Bom", location: "Galeria Principal", exhibition: "Pós-Impressionismo Hoje", conservationQueue: null,
+      status: "Exposto", condition: "Bom", location: "Galeria Principal", 
+      // Campo de exposição principal vira apenas visual/cache, mas a lógica real vem do exhibitionHistory
+      exhibition: "Pós-Impressionismo Hoje", 
+      // NOVO: Histórico de exposições
+      exhibitionHistory: [
+        { id: 1, name: "Pós-Impressionismo Hoje", startDate: "2023-01-15", endDate: "2025-06-30", location: "Galeria Principal" }
+      ],
+      conservationQueue: null,
       image: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ea/Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg/600px-Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg",
       description: "Uma das obras mais famosas da arte ocidental, retratando a vista da janela do quarto do asilo.",
       observations: "Vidro antirreflexo instalado em 2022.", createdBy: "Sistema", createdAt: new Date("2023-01-15").toISOString(),
@@ -234,7 +242,10 @@ export default function NugepSys() {
     },
     { 
       id: 2, regNumber: "E-1902-045", title: "O Pensador", artist: "Auguste Rodin", year: 1902, type: "Escultura", 
-      status: "Armazenado", condition: "Bom", location: "Reserva Técnica A", exhibition: "", conservationQueue: null,
+      status: "Armazenado", condition: "Bom", location: "Reserva Técnica A", 
+      exhibition: "", 
+      exhibitionHistory: [], // Vazio inicialmente
+      conservationQueue: null,
       image: "https://upload.wikimedia.org/wikipedia/commons/thumb/3/39/The_Thinker%2C_Rodin.jpg/450px-The_Thinker%2C_Rodin.jpg",
       description: "Uma escultura em bronze que retrata um homem em meditação sóbria.",
       observations: "Limpeza semestral.", createdBy: "Sistema", createdAt: new Date("2023-02-20").toISOString(),
@@ -246,7 +257,7 @@ export default function NugepSys() {
 
   const [newArtifact, setNewArtifact] = useState({ 
     regNumber: '', title: '', artist: '', year: '', type: 'Pintura', status: 'Armazenado', condition: 'Bom', location: 'Reserva Técnica A', exhibition: '',
-    image: '', description: '', observations: '', customFields: [], relatedTo: '', provenance: '', copyright: '', audioDesc: ''
+    image: '', description: '', observations: '', customFields: [], relatedTo: '', provenance: '', copyright: '', audioDesc: '', exhibitionHistory: []
   });
 
   // --- Funções Auxiliares ---
@@ -262,12 +273,21 @@ export default function NugepSys() {
 
   const exportToCSV = () => {
     addLog("EXPORT", "Exportou planilha completa do acervo");
-    const headers = ["ID", "Nº Registro", "Título", "Artista", "Ano", "Tipo", "Status", "Localização", "Condição", "Descrição"];
-    const csvContent = [headers.join(","), ...artifacts.map(a => [a.id, `"${a.regNumber}"`, `"${a.title}"`, `"${a.artist}"`, a.year, a.type, a.status, `"${a.location}"`, a.condition, `"${a.description}"`].join(","))].join("\n");
+    const headers = ["ID", "Nº Registro", "Título", "Artista", "Ano", "Tipo", "Status", "Localização", "Exposições (Histórico)"];
+    const csvContent = [headers.join(","), ...artifacts.map(a => [
+      a.id, 
+      `"${a.regNumber}"`, 
+      `"${a.title}"`, 
+      `"${a.artist}"`, 
+      a.year, 
+      a.type, 
+      a.status, 
+      `"${a.location}"`, 
+      `"${a.exhibitionHistory ? a.exhibitionHistory.map(ex => ex.name).join('; ') : ''}"`
+    ].join(","))].join("\n");
     const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })); link.download = `nugep_acervo_${new Date().toISOString().slice(0,10)}.csv`; document.body.appendChild(link); link.click(); document.body.removeChild(link);
   };
 
-  // --- Função de IMPORTAÇÃO CSV ---
   const handleCSVImport = (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -276,18 +296,12 @@ export default function NugepSys() {
     reader.onload = (e) => {
       const text = e.target.result;
       const lines = text.split('\n');
-      
-      // Remove cabeçalho e linhas vazias
       const dataLines = lines.slice(1).filter(line => line.trim() !== '');
       
       const importedArtifacts = dataLines.map((line, index) => {
-        // Separação simples por vírgula (considerando aspas simples para simplificação neste exemplo)
-        // Ordem esperada: Nº Registro, Título, Artista, Ano, Tipo, Status, Localização, Condição, Descrição
-        // Remove aspas extras se existirem
         const cols = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(col => col.trim().replace(/^"|"$/g, ''));
-        
         return {
-          id: Date.now() + index, // ID único sequencial
+          id: Date.now() + index,
           regNumber: cols[0] || `IMP-${Date.now()}-${index}`,
           title: cols[1] || 'Sem Título',
           artist: cols[2] || 'Desconhecido',
@@ -298,8 +312,9 @@ export default function NugepSys() {
           condition: cols[7] || 'Bom',
           description: cols[8] || '',
           exhibition: '',
+          exhibitionHistory: [],
           conservationQueue: null,
-          image: '', // Importação CSV simples não lida com imagens binárias
+          image: '',
           observations: 'Importado via CSV',
           createdBy: currentUser.name,
           createdAt: new Date().toISOString(),
@@ -312,12 +327,40 @@ export default function NugepSys() {
       setArtifacts(prev => [...prev, ...importedArtifacts]);
       addLog("IMPORT", `Importou ${importedArtifacts.length} fichas via CSV`);
       alert(`Sucesso! ${importedArtifacts.length} novas obras foram adicionadas ao acervo.`);
-      if (fileInputRef.current) fileInputRef.current.value = ""; // Limpa o input
+      if (fileInputRef.current) fileInputRef.current.value = "";
     };
     reader.readAsText(file);
   };
 
-  // --- LÓGICA DE EXPOSIÇÕES ---
+  // --- LÓGICA DE EXPOSIÇÕES (CORRIGIDA) ---
+  
+  // Função auxiliar para recalcular status com base no histórico
+  const calculateArtifactStatus = (artifact) => {
+    const today = new Date().toISOString().slice(0,10);
+    // Filtra exposições que ainda estão ativas ou são futuras (Data Fim >= Hoje)
+    const activeExhibitions = artifact.exhibitionHistory.filter(ex => ex.endDate >= today);
+
+    if (activeExhibitions.length > 0) {
+      // Se tiver exposição ativa/futura
+      // Pegamos a mais recente (última adicionada ou ordenamos por data)
+      // Aqui assumimos a última da lista filtrada como a vigente
+      const currentEx = activeExhibitions[activeExhibitions.length - 1];
+      return {
+        status: 'Exposto',
+        location: currentEx.location,
+        exhibition: currentEx.name // Atualiza o nome da exposição principal para visualização
+      };
+    } else {
+      // Se não tiver exposição ativa, volta para Armazenado
+      // Mantém localização atual se não for alterada explicitamente, mas por padrão volta pra Reserva
+      return {
+        status: 'Armazenado',
+        location: 'Reserva Técnica A', // Default seguro
+        exhibition: ''
+      };
+    }
+  };
+
   const handleCreateExhibition = (e) => {
     e.preventDefault();
     const exhibition = { ...newExhibition, id: Date.now() };
@@ -329,18 +372,23 @@ export default function NugepSys() {
 
   const handleDeleteExhibition = (e, id, name) => {
     e.stopPropagation();
-    if (window.confirm(`ATENÇÃO: Deseja excluir a exposição "${name}"?\n\nAs obras nela vinculadas retornarão automaticamente ao status 'Armazenado'.`)) {
+    if (window.confirm(`ATENÇÃO: Deseja excluir a exposição "${name}"?\n\nO registro será removido do histórico de todas as obras.`)) {
       const updatedArtifacts = artifacts.map(art => {
-        if (art.exhibition === name) {
-          return { 
-            ...art, 
-            exhibition: '', 
-            status: 'Armazenado', 
-            location: 'Reserva Técnica A', 
-            movements: [{ id: Date.now(), date: new Date().toISOString().slice(0,10), type: "Retorno de Exposição (Excluída)", from: name, to: 'Reserva Técnica A', responsible: currentUser.name }, ...art.movements]
-          };
-        }
-        return art;
+        // Remove a exposição do histórico
+        const newHistory = art.exhibitionHistory ? art.exhibitionHistory.filter(h => h.name !== name) : [];
+        
+        // Cria objeto temporário para recalcular status
+        const tempArt = { ...art, exhibitionHistory: newHistory };
+        const statusUpdate = calculateArtifactStatus(tempArt);
+
+        return { 
+          ...art, 
+          exhibitionHistory: newHistory,
+          ...statusUpdate,
+          movements: statusUpdate.status === 'Armazenado' && art.status === 'Exposto' ? 
+            [{ id: Date.now(), date: new Date().toISOString().slice(0,10), type: "Retorno de Exposição (Excluída)", from: name, to: statusUpdate.location, responsible: currentUser.name }, ...art.movements]
+            : art.movements
+        };
       });
       setArtifacts(updatedArtifacts);
       setExhibitions(exhibitions.filter(ex => ex.id !== id));
@@ -348,49 +396,79 @@ export default function NugepSys() {
     }
   };
 
-  // Lógica de Vincular Obra a Exposição (Com verificação de data)
+  // ADICIONAR OBRA A EXPOSIÇÃO (Lógica Atualizada)
   const addArtifactToExhibition = (artifactId, exhibition) => {
-    const today = new Date().toISOString().slice(0,10);
-    // Verifica se a exposição está acontecendo hoje
-    const isActive = exhibition.startDate <= today && exhibition.endDate >= today;
-
     const updated = artifacts.map(art => {
       if (art.id === artifactId) {
-        let updates = { exhibition: exhibition.name }; // Sempre vincula o nome para histórico
-        
-        if (isActive) {
-           // Se a exposição está ativa, muda status e localização
-           updates.status = 'Exposto';
-           updates.location = exhibition.location;
-           updates.movements = [{ id: Date.now(), date: today, type: "Montagem Exposição", from: art.location, to: exhibition.location, responsible: currentUser.name }, ...art.movements];
-           alert(`Obra adicionada à exposição ativa!\nStatus atualizado para: Exposto\nLocal: ${exhibition.location}`);
-        } else {
-           // Se a exposição já passou ou é futura, apenas vincula o nome no registro, não muda status físico
-           alert(`Obra vinculada ao registro da exposição "${exhibition.name}".\n\nATENÇÃO: Como a exposição não está ativa (Data atual fora do período), o status da obra NÃO foi alterado para 'Exposto'.`);
+        // Verifica se já está nessa exposição para não duplicar
+        const alreadyIn = art.exhibitionHistory?.some(h => h.name === exhibition.name);
+        if (alreadyIn) {
+          alert("Esta obra já está registrada nesta exposição.");
+          return art;
         }
-        return { ...art, ...updates };
+
+        // Adiciona ao histórico
+        const newHistory = [...(art.exhibitionHistory || []), {
+          id: exhibition.id,
+          name: exhibition.name,
+          startDate: exhibition.startDate,
+          endDate: exhibition.endDate,
+          location: exhibition.location
+        }];
+
+        // Recalcula status
+        const tempArt = { ...art, exhibitionHistory: newHistory };
+        const statusUpdate = calculateArtifactStatus(tempArt);
+
+        // Gera movimento se mudou de local/status
+        let newMovements = art.movements;
+        if (statusUpdate.status === 'Exposto' && art.status !== 'Exposto') {
+             newMovements = [{ id: Date.now(), date: new Date().toISOString().slice(0,10), type: "Montagem Exposição", from: art.location, to: exhibition.location, responsible: currentUser.name }, ...art.movements];
+             alert(`Obra adicionada à exposição!\nStatus: Exposto\nLocal: ${exhibition.location}`);
+        } else if (statusUpdate.status === 'Exposto' && art.status === 'Exposto') {
+             // Já estava exposta, mas talvez mudou de exposição vigente
+             if (art.location !== exhibition.location) {
+                newMovements = [{ id: Date.now(), date: new Date().toISOString().slice(0,10), type: "Trânsito Entre Exposições", from: art.location, to: exhibition.location, responsible: currentUser.name }, ...art.movements];
+             }
+             alert("Obra adicionada ao histórico da exposição.\n(Mantém status Exposto)");
+        } else {
+             alert(`Obra registrada no histórico da exposição antiga "${exhibition.name}".\nStatus permanece: ${art.status} (Pois a exposição já terminou).`);
+        }
+
+        return { ...art, exhibitionHistory: newHistory, movements: newMovements, ...statusUpdate };
       }
       return art;
     });
     setArtifacts(updated);
-    addLog("EXPOSICAO", `Vinculou obra ${artifactId} à exposição ${exhibition.name} (${isActive ? 'Ativa' : 'Histórico'})`);
+    addLog("EXPOSICAO", `Adicionou obra ${artifactId} ao histórico da exposição ${exhibition.name}`);
   };
 
-  const removeArtifactFromExhibition = (artifactId) => {
+  // REMOVER OBRA DE EXPOSIÇÃO (Lógica Atualizada)
+  const removeArtifactFromExhibition = (artifactId, exhibitionName) => {
+    // Se não passar exhibitionName, remove a atual (compatibilidade)
     const updated = artifacts.map(art => {
       if (art.id === artifactId) {
-        return { 
-          ...art, 
-          exhibition: '', 
-          status: 'Armazenado', 
-          location: 'Reserva Técnica A',
-          movements: [{ id: Date.now(), date: new Date().toISOString().slice(0,10), type: "Desmontagem Exposição", from: art.location, to: 'Reserva Técnica A', responsible: currentUser.name }, ...art.movements]
-        };
+        const targetExName = exhibitionName || art.exhibition;
+        
+        // Filtra histórico
+        const newHistory = art.exhibitionHistory ? art.exhibitionHistory.filter(h => h.name !== targetExName) : [];
+        
+        // Recalcula
+        const tempArt = { ...art, exhibitionHistory: newHistory };
+        const statusUpdate = calculateArtifactStatus(tempArt);
+
+        // Movimento de retorno se deixou de ser exposto
+        let newMovements = art.movements;
+        if (art.status === 'Exposto' && statusUpdate.status === 'Armazenado') {
+           newMovements = [{ id: Date.now(), date: new Date().toISOString().slice(0,10), type: "Desmontagem Exposição", from: art.location, to: statusUpdate.location, responsible: currentUser.name }, ...art.movements];
+        }
+
+        return { ...art, exhibitionHistory: newHistory, movements: newMovements, ...statusUpdate };
       }
       return art;
     });
     setArtifacts(updated);
-    addLog("EXPOSICAO", `Removeu obra ${artifactId} de exposição`);
+    addLog("EXPOSICAO", `Removeu obra ${artifactId} da exposição ${exhibitionName || 'Atual'}`);
   };
 
   // --- LÓGICA DE MOVIMENTAÇÃO ---
@@ -452,10 +530,10 @@ export default function NugepSys() {
   
   // Função para abrir o modo de edição
   const handleEditArtifact = (artifact) => {
-    setNewArtifact(artifact); // Carrega os dados da obra no formulário
-    setIsEditing(true); // Ativa modo de edição
-    setActiveTab('add'); // Vai para a aba de cadastro/edição
-    setSelectedArtifact(null); // Fecha o modal de detalhes se estiver aberto
+    setNewArtifact(artifact); 
+    setIsEditing(true); 
+    setActiveTab('add'); 
+    setSelectedArtifact(null); 
   };
 
   // Função para salvar (Criar ou Editar)
@@ -466,7 +544,7 @@ export default function NugepSys() {
       // Lógica de Edição
       const updatedArtifacts = artifacts.map(art => {
         if (art.id === newArtifact.id) {
-          return { ...art, ...newArtifact }; // Atualiza com os novos dados
+          return { ...art, ...newArtifact }; 
         }
         return art;
       });
@@ -488,14 +566,13 @@ export default function NugepSys() {
       alert("Ficha catalogada com sucesso!"); 
     }
 
-    // Resetar formulário
-    setNewArtifact({ regNumber: '', title: '', artist: '', year: '', type: 'Pintura', status: 'Armazenado', condition: 'Bom', location: 'Reserva Técnica A', exhibition: '', image: '', description: '', observations: '', customFields: [], relatedTo: '', provenance: '', copyright: '', audioDesc: '' }); 
+    setNewArtifact({ regNumber: '', title: '', artist: '', year: '', type: 'Pintura', status: 'Armazenado', condition: 'Bom', location: 'Reserva Técnica A', exhibition: '', image: '', description: '', observations: '', customFields: [], relatedTo: '', provenance: '', copyright: '', audioDesc: '', exhibitionHistory: [] }); 
     setIsEditing(false);
     setActiveTab('collection'); 
   };
   
   const handleCancelEdit = () => {
-    setNewArtifact({ regNumber: '', title: '', artist: '', year: '', type: 'Pintura', status: 'Armazenado', condition: 'Bom', location: 'Reserva Técnica A', exhibition: '', image: '', description: '', observations: '', customFields: [], relatedTo: '', provenance: '', copyright: '', audioDesc: '' });
+    setNewArtifact({ regNumber: '', title: '', artist: '', year: '', type: 'Pintura', status: 'Armazenado', condition: 'Bom', location: 'Reserva Técnica A', exhibition: '', image: '', description: '', observations: '', customFields: [], relatedTo: '', provenance: '', copyright: '', audioDesc: '', exhibitionHistory: [] });
     setIsEditing(false);
     setActiveTab('collection');
   };
@@ -696,6 +773,9 @@ export default function NugepSys() {
                             <div className="flex flex-col">
                               <span className="text-sm font-medium text-slate-700">{art.location}</span>
                               <span className="text-xs text-slate-400">{art.type}</span>
+                              {art.exhibitionHistory && art.exhibitionHistory.length > 1 && (
+                                <span className="text-[10px] text-blue-500 font-bold mt-1 flex items-center gap-1">+ {art.exhibitionHistory.length - 1} Exposição(ões) Antiga(s)</span>
+                              )}
                             </div>
                           </td>
                           <td className="px-6 py-4">
@@ -740,7 +820,9 @@ export default function NugepSys() {
                     {exhibitions.map(ex => (
                       <div key={ex.id} className="bg-white border border-slate-200 rounded-xl p-6 hover:shadow-lg transition-shadow cursor-pointer group" onClick={() => setSelectedExhibition(ex)}>
                         <div className="flex justify-between items-start mb-4">
-                          <span className="bg-blue-100 text-blue-800 text-[10px] font-bold px-2 py-1 rounded uppercase">Exposição</span>
+                          <span className={`px-2 py-1 rounded uppercase text-[10px] font-bold ${ex.endDate >= new Date().toISOString().slice(0,10) ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-500'}`}>
+                            {ex.endDate >= new Date().toISOString().slice(0,10) ? 'Ativa/Futura' : 'Encerrada'}
+                          </span>
                           <div className="flex gap-2">
                             <button 
                               onClick={(e) => handleDeleteExhibition(e, ex.id, ex.name)} 
@@ -759,7 +841,7 @@ export default function NugepSys() {
                           <p className="flex items-center gap-2"><User size={14}/> Curadoria: {ex.curator}</p>
                         </div>
                         <div className="pt-4 border-t border-slate-100 flex justify-between items-center">
-                          <span className="text-xs font-bold text-slate-600">{artifacts.filter(a => a.exhibition === ex.name).length} Obras</span>
+                          <span className="text-xs font-bold text-slate-600">{artifacts.filter(a => a.exhibitionHistory?.some(h => h.name === ex.name)).length} Obras Vinculadas</span>
                           <span className="text-xs text-blue-600 font-bold group-hover:underline">Gerenciar Obras →</span>
                         </div>
                       </div>
@@ -780,11 +862,11 @@ export default function NugepSys() {
                     {/* Lista de Obras na Exposição */}
                     <div className="bg-white border border-slate-200 rounded-xl flex flex-col overflow-hidden">
                       <div className="p-4 bg-blue-50 border-b border-blue-100 flex justify-between items-center">
-                        <h3 className="font-bold text-blue-900 flex items-center gap-2"><GalleryVerticalEnd size={18}/> Obras na Exposição</h3>
-                        <span className="bg-blue-200 text-blue-800 px-2 py-0.5 rounded text-xs font-bold">{artifacts.filter(a => a.exhibition === selectedExhibition.name).length}</span>
+                        <h3 className="font-bold text-blue-900 flex items-center gap-2"><GalleryVerticalEnd size={18}/> Obras Vinculadas</h3>
+                        <span className="bg-blue-200 text-blue-800 px-2 py-0.5 rounded text-xs font-bold">{artifacts.filter(a => a.exhibitionHistory?.some(h => h.name === selectedExhibition.name)).length}</span>
                       </div>
                       <div className="flex-1 overflow-y-auto p-2 space-y-2 bg-slate-50">
-                        {artifacts.filter(a => a.exhibition === selectedExhibition.name).map(art => (
+                        {artifacts.filter(a => a.exhibitionHistory?.some(h => h.name === selectedExhibition.name)).map(art => (
                           <div key={art.id} className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm flex justify-between items-center group">
                             <div className="flex items-center gap-3">
                               <div className="w-10 h-10 bg-slate-100 rounded overflow-hidden flex-shrink-0">
@@ -796,16 +878,16 @@ export default function NugepSys() {
                               </div>
                             </div>
                             <button 
-                              onClick={() => removeArtifactFromExhibition(art.id)}
+                              onClick={() => removeArtifactFromExhibition(art.id, selectedExhibition.name)}
                               className="p-2 bg-red-50 text-red-500 rounded-lg hover:bg-red-100"
-                              title="Remover da exposição"
+                              title="Remover desta exposição"
                             >
                               <MoveRight size={16}/>
                             </button>
                           </div>
                         ))}
-                        {artifacts.filter(a => a.exhibition === selectedExhibition.name).length === 0 && (
-                          <div className="text-center p-8 text-slate-400 italic">Nenhuma obra nesta exposição.</div>
+                        {artifacts.filter(a => a.exhibitionHistory?.some(h => h.name === selectedExhibition.name)).length === 0 && (
+                          <div className="text-center p-8 text-slate-400 italic">Nenhuma obra vinculada a esta exposição.</div>
                         )}
                       </div>
                     </div>
@@ -820,7 +902,8 @@ export default function NugepSys() {
                         </div>
                       </div>
                       <div className="flex-1 overflow-y-auto p-2 space-y-2 bg-slate-50">
-                        {artifacts.filter(a => !a.exhibition && a.location !== 'Externo').map(art => (
+                        {/* Filtra obras que NÃO estão nesta exposição específica */}
+                        {artifacts.filter(a => !a.exhibitionHistory?.some(h => h.name === selectedExhibition.name) && a.location !== 'Externo').map(art => (
                           <div key={art.id} className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm flex justify-between items-center group opacity-80 hover:opacity-100">
                             <button 
                               onClick={() => addArtifactToExhibition(art.id, selectedExhibition)}
@@ -1275,13 +1358,13 @@ export default function NugepSys() {
               <div className="flex flex-1 overflow-hidden">
                 {/* Sidebar Tabs */}
                 <div className="w-48 bg-slate-50 border-r p-2 space-y-1 no-print">
-                  {['geral', 'multimidia', 'conservacao', 'historico'].map(tab => (
+                  {['geral', 'exposicoes', 'multimidia', 'conservacao', 'historico'].map(tab => (
                     <button 
                       key={tab}
                       onClick={() => setDetailTab(tab)}
                       className={`w-full text-left px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider ${detailTab === tab ? 'bg-white shadow-sm text-green-700 border border-slate-200' : 'text-slate-500 hover:bg-slate-100'}`}
                     >
-                      {tab === 'geral' ? 'Ficha Técnica' : tab === 'multimidia' ? 'Multimídia' : tab === 'conservacao' ? 'Conservação' : 'Histórico & Mov.'}
+                      {tab === 'geral' ? 'Ficha Técnica' : tab === 'exposicoes' ? 'Exposições' : tab === 'multimidia' ? 'Multimídia' : tab === 'conservacao' ? 'Conservação' : 'Histórico & Mov.'}
                     </button>
                   ))}
                 </div>
@@ -1322,6 +1405,34 @@ export default function NugepSys() {
                           </div>
                         </div>
                       )}
+                    </div>
+                  )}
+
+                  {detailTab === 'exposicoes' && (
+                    <div className="animate-in fade-in space-y-6">
+                       <h4 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><GalleryVerticalEnd size={16}/> Histórico de Exposições</h4>
+                       
+                       <div className="space-y-4">
+                          {selectedArtifact.exhibitionHistory && selectedArtifact.exhibitionHistory.length > 0 ? (
+                            selectedArtifact.exhibitionHistory.sort((a,b) => new Date(b.startDate) - new Date(a.startDate)).map((ex, i) => {
+                              const isActive = ex.endDate >= new Date().toISOString().slice(0,10);
+                              return (
+                                <div key={i} className={`p-4 rounded-lg border ${isActive ? 'bg-green-50 border-green-200' : 'bg-slate-50 border-slate-200'}`}>
+                                   <div className="flex justify-between items-start mb-2">
+                                     <h5 className="font-bold text-slate-800">{ex.name}</h5>
+                                     {isActive && <span className="bg-green-200 text-green-800 text-[10px] px-2 py-0.5 rounded font-bold uppercase">Ativa</span>}
+                                   </div>
+                                   <div className="grid grid-cols-2 gap-4 text-sm text-slate-600">
+                                      <p><span className="font-bold text-slate-500 text-xs uppercase block">Período</span> {ex.startDate} a {ex.endDate}</p>
+                                      <p><span className="font-bold text-slate-500 text-xs uppercase block">Local</span> {ex.location}</p>
+                                   </div>
+                                </div>
+                              );
+                            })
+                          ) : (
+                            <p className="text-slate-400 text-sm italic">Nenhum registro de exposição.</p>
+                          )}
+                       </div>
                     </div>
                   )}
 
