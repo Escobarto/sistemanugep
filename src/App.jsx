@@ -1,61 +1,46 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
-  LayoutDashboard, 
-  BookOpen, 
-  PlusCircle, 
-  Search, 
-  Settings, 
-  Landmark, 
-  Image as ImageIcon, 
-  Trash2, 
-  Sparkles, 
-  MessageSquare, 
-  Send,
-  Loader2,
-  FileText,
-  Upload,
-  Map,
-  X,
-  Maximize2,
-  Download,
-  Filter,
-  LogIn,
-  History,
-  User,
-  ShieldCheck,
-  Mail,
-  ArrowLeft,
-  CheckCircle,
-  Lock,
-  BarChart3,
-  PieChart,
-  Printer,
-  Plus,
-  Link as LinkIcon,
-  ExternalLink,
-  FileSpreadsheet,
-  QrCode,
-  Truck,
-  Stethoscope,
-  Eye,
-  Camera,
-  Copyright,
-  Archive,
-  AlertTriangle,
-  ArrowRight,
-  ClipboardList,
-  GalleryVerticalEnd,
-  Calendar,
-  MapPin,
-  MoveRight,
-  MoveLeft,
-  KeyRound,
-  Pencil,
-  FileInput,
-  List // Ícone novo para listar histórico
+  LayoutDashboard, BookOpen, PlusCircle, Search, Settings, Landmark, 
+  Image as ImageIcon, Trash2, Sparkles, Loader2, FileText, Upload, 
+  Map, X, Maximize2, Download, Filter, LogIn, History, User, 
+  ShieldCheck, Mail, ArrowLeft, CheckCircle, Lock, BarChart3, 
+  PieChart, Printer, Plus, Link as LinkIcon, ExternalLink, 
+  FileSpreadsheet, QrCode, Truck, Stethoscope, Eye, Camera, 
+  Copyright, Archive, AlertTriangle, ArrowRight, ClipboardList, 
+  GalleryVerticalEnd, Calendar, MapPin, MoveRight, MoveLeft, 
+  KeyRound, Pencil, FileInput, List
 } from 'lucide-react';
 
-// --- Configuração da API do Gemini ---
+// --- IMPORTAÇÕES DO FIREBASE ---
+import { initializeApp } from 'firebase/app';
+import { 
+  getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, 
+  onSnapshot, query, orderBy, serverTimestamp 
+} from 'firebase/firestore';
+import { 
+  getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged 
+} from 'firebase/auth';
+
+// --- CONFIGURAÇÃO E INICIALIZAÇÃO DO FIREBASE (SEU PROJETO) ---
+const firebaseConfig = {
+  apiKey: "AIzaSyBcJGFgJqhMUSbBjOAJcUXXT2Cptl8sFDo",
+  authDomain: "nugepsistema.firebaseapp.com",
+  projectId: "nugepsistema",
+  storageBucket: "nugepsistema.firebasestorage.app",
+  messagingSenderId: "324001063842",
+  appId: "1:324001063842:web:1fb9c00ed1b7dcedff08fb",
+  measurementId: "G-J3SHPEQ9S1"
+};
+
+// Inicializa o Firebase com suas credenciais
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+// Define um ID para o ambiente do app (usado para organizar as pastas no banco)
+const appId = 'nugep-oficial'; 
+
+// --- Configuração da API do Gemini (IA) ---
 const apiKey = ""; 
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
@@ -79,12 +64,7 @@ const printStyles = `
 const LoginScreen = ({ onLogin }) => {
   const [authMode, setAuthMode] = useState('login'); 
   const [formData, setFormData] = useState({ 
-    username: '', 
-    password: '', 
-    email: '', 
-    regName: '', 
-    regPassword: '',
-    accessCode: '' 
+    username: '', password: '', email: '', regName: '', regPassword: '', accessCode: '' 
   });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -94,6 +74,7 @@ const LoginScreen = ({ onLogin }) => {
   const handleLogin = (e) => {
     e.preventDefault();
     if (formData.username && formData.password) {
+      // REGRA DE PERMISSÃO: Se o nome tiver 'admin', vira Administrador
       const role = formData.username.toLowerCase().includes('admin') ? 'Administrador' : 'Usuário';
       onLogin({ name: formData.username, role: role, loginTime: new Date() });
     } else { setError('Preencha todos os campos.'); }
@@ -141,7 +122,7 @@ const LoginScreen = ({ onLogin }) => {
           {authMode === 'login' && (
             <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
               <form onSubmit={handleLogin} className="space-y-4">
-                <div className="relative"><User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} /><input name="username" type="text" className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none text-sm" placeholder="Usuário" value={formData.username} onChange={handleChange} /></div>
+                <div className="relative"><User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} /><input name="username" type="text" className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none text-sm" placeholder="Usuário (Use 'admin' para permissão total)" value={formData.username} onChange={handleChange} /></div>
                 <div className="relative"><Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} /><input name="password" type="password" className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none text-sm" placeholder="Senha" value={formData.password} onChange={handleChange} /></div>
                 {error && <p className="text-red-500 text-xs font-bold">{error}</p>}
                 <button type="submit" className="w-full py-3 bg-blue-700 hover:bg-blue-800 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-colors text-sm uppercase tracking-wide"><LogIn size={18} /> Acessar Sistema</button>
@@ -185,10 +166,17 @@ const LoginScreen = ({ onLogin }) => {
 // --- Componente Principal ---
 export default function NugepSys() {
   const [currentUser, setCurrentUser] = useState(null);
+  const [firebaseUser, setFirebaseUser] = useState(null); // Auth do Firebase
+  
   const [activeTab, setActiveTab] = useState('dashboard');
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState({ location: '', type: '', artist: '', status: '' });
+  
+  // Estados de Dados (Vindo do Firebase)
   const [systemLogs, setSystemLogs] = useState([]);
+  const [exhibitions, setExhibitions] = useState([]);
+  const [artifacts, setArtifacts] = useState([]);
+
   const [selectedArtifact, setSelectedArtifact] = useState(null);
   const [detailTab, setDetailTab] = useState('geral');
   const fileInputRef = useRef(null); 
@@ -203,12 +191,6 @@ export default function NugepSys() {
   // Estados Conservação
   const [selectedForConservation, setSelectedForConservation] = useState([]);
 
-  // Estados Exposições
-  const [exhibitions, setExhibitions] = useState([
-    { id: 1, name: "Pós-Impressionismo Hoje", startDate: "2023-01-15", endDate: "2025-06-30", location: "Galeria Principal", curator: "Maria Costa" },
-    { id: 2, name: "Modernismo Brasileiro", startDate: "2023-05-10", endDate: "2023-12-20", location: "Sala 2", curator: "João Silva" },
-    { id: 3, name: "Passado Histórico (Exemplo Antigo)", startDate: "2010-01-01", endDate: "2010-12-31", location: "Galeria Principal", curator: "Curador Antigo" }
-  ]);
   const [selectedExhibition, setSelectedExhibition] = useState(null);
   const [newExhibition, setNewExhibition] = useState({ name: '', startDate: '', endDate: '', location: '', curator: '' });
   const [isExhibitionModalOpen, setIsExhibitionModalOpen] = useState(false);
@@ -220,49 +202,108 @@ export default function NugepSys() {
   const [isGeneratingDesc, setIsGeneratingDesc] = useState(false);
   const [tempCustomField, setTempCustomField] = useState({ label: '', value: '' });
 
-  // Dados do Acervo (Inicial)
-  const [artifacts, setArtifacts] = useState([
-    { 
-      id: 1, regNumber: "P-1889-001", title: "A Noite Estrelada", artist: "Vincent van Gogh", year: 1889, type: "Pintura", 
-      status: "Exposto", condition: "Bom", location: "Galeria Principal", 
-      // Campo de exposição principal vira apenas visual/cache, mas a lógica real vem do exhibitionHistory
-      exhibition: "Pós-Impressionismo Hoje", 
-      // NOVO: Histórico de exposições
-      exhibitionHistory: [
-        { id: 1, name: "Pós-Impressionismo Hoje", startDate: "2023-01-15", endDate: "2025-06-30", location: "Galeria Principal" }
-      ],
-      conservationQueue: null,
-      image: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ea/Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg/600px-Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg",
-      description: "Uma das obras mais famosas da arte ocidental, retratando a vista da janela do quarto do asilo.",
-      observations: "Vidro antirreflexo instalado em 2022.", createdBy: "Sistema", createdAt: new Date("2023-01-15").toISOString(),
-      customFields: [{ label: "Seguro", value: "Allianz Art" }, { label: "Valor Estimado", value: "$100M" }],
-      relatedTo: null, provenance: "Doado pela família do artista em 1950.", copyright: "Domínio Público", audioDesc: "Pintura a óleo com pinceladas espirais em azul e amarelo.",
-      movements: [{ date: "2023-01-10", type: "Entrada", from: "Reserva A", to: "Galeria Principal", responsible: "João Silva" }],
-      interventions: [{ date: "2022-05-20", type: "Limpeza", description: "Remoção de verniz oxidado.", responsible: "Lab. Restauro" }]
-    },
-    { 
-      id: 2, regNumber: "E-1902-045", title: "O Pensador", artist: "Auguste Rodin", year: 1902, type: "Escultura", 
-      status: "Armazenado", condition: "Bom", location: "Reserva Técnica A", 
-      exhibition: "", 
-      exhibitionHistory: [], // Vazio inicialmente
-      conservationQueue: null,
-      image: "https://upload.wikimedia.org/wikipedia/commons/thumb/3/39/The_Thinker%2C_Rodin.jpg/450px-The_Thinker%2C_Rodin.jpg",
-      description: "Uma escultura em bronze que retrata um homem em meditação sóbria.",
-      observations: "Limpeza semestral.", createdBy: "Sistema", createdAt: new Date("2023-02-20").toISOString(),
-      customFields: [{ label: "Material", value: "Bronze" }, { label: "Peso", value: "700kg" }],
-      relatedTo: null, provenance: "Adquirido em leilão, 1980.", copyright: "Domínio Público", audioDesc: "Escultura de bronze de um homem sentado.",
-      movements: [], interventions: []
-    }
-  ]);
-
   const [newArtifact, setNewArtifact] = useState({ 
     regNumber: '', title: '', artist: '', year: '', type: 'Pintura', status: 'Armazenado', condition: 'Bom', location: 'Reserva Técnica A', exhibition: '',
     image: '', description: '', observations: '', customFields: [], relatedTo: '', provenance: '', copyright: '', audioDesc: '', exhibitionHistory: []
   });
 
-  // --- Funções Auxiliares ---
-  const addLog = (action, details) => { setSystemLogs(prev => [{ id: Date.now(), timestamp: new Date(), user: currentUser ? currentUser.name : 'Sistema', role: currentUser ? currentUser.role : 'System', action, details }, ...prev]); };
-  const handleUserLogin = (user) => { setCurrentUser(user); addLog("LOGIN", "Usuário acessou o sistema"); };
+  // --- FIREBASE: Inicialização e Listeners ---
+  
+  // 1. Autenticação no Firebase (Necessário para acessar Firestore)
+  useEffect(() => {
+    const initAuth = async () => {
+      // Como estamos usando sua config, o token inicial do ambiente não serve mais.
+      // Tentamos login anônimo direto.
+      try {
+        await signInAnonymously(auth);
+      } catch (error) {
+        console.error("Erro ao autenticar anonimamente:", error);
+        alert("Erro de conexão com o Banco de Dados. Verifique se a Autenticação Anônima está ativada no Firebase Console.");
+      }
+    };
+    initAuth();
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setFirebaseUser(user);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // 2. Escutar Coleções do Firestore (Só roda após auth)
+  useEffect(() => {
+    if (!firebaseUser) return;
+
+    // Listener de Artefatos
+    const unsubArtifacts = onSnapshot(
+      collection(db, 'artifacts', appId, 'public', 'data', 'collection_items'),
+      (snapshot) => {
+        const loadedArtifacts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setArtifacts(loadedArtifacts);
+      },
+      (error) => {
+        console.error("Erro ao carregar acervo:", error);
+        if (error.code === 'permission-denied') {
+            alert("Erro de Permissão: O banco de dados foi criado, mas as regras de segurança impedem a leitura. Vá em 'Firestore Database > Regras' e permita leitura/escrita.");
+        }
+      }
+    );
+
+    // Listener de Exposições
+    const unsubExhibitions = onSnapshot(
+      collection(db, 'artifacts', appId, 'public', 'data', 'exhibitions'),
+      (snapshot) => {
+        const loadedExhibitions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setExhibitions(loadedExhibitions);
+      },
+      (error) => console.error("Erro ao carregar exposições:", error)
+    );
+
+    // Listener de Logs (Ordenado por data decrescente seria ideal, mas fazemos sort no client por regra do prompt de no-complex-queries)
+    const unsubLogs = onSnapshot(
+      collection(db, 'artifacts', appId, 'public', 'data', 'system_logs'),
+      (snapshot) => {
+        const loadedLogs = snapshot.docs.map(doc => {
+            const data = doc.data();
+            // Converter timestamp do firestore se existir, ou usar string
+            const dateObj = data.timestamp && data.timestamp.toDate ? data.timestamp.toDate() : new Date(data.timestamp);
+            return { id: doc.id, ...data, timestamp: dateObj };
+        });
+        // Sort no cliente (mais novo primeiro)
+        loadedLogs.sort((a, b) => b.timestamp - a.timestamp);
+        setSystemLogs(loadedLogs);
+      },
+      (error) => console.error("Erro ao carregar logs:", error)
+    );
+
+    return () => {
+      unsubArtifacts();
+      unsubExhibitions();
+      unsubLogs();
+    };
+  }, [firebaseUser]);
+
+
+  // --- Funções Auxiliares Modificadas para Firebase ---
+  
+  const addLog = async (action, details) => { 
+    if (!firebaseUser) return;
+    try {
+        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'system_logs'), {
+            timestamp: serverTimestamp(), // Usa hora do servidor
+            user: currentUser ? currentUser.name : 'Sistema', 
+            role: currentUser ? currentUser.role : 'System', 
+            action, 
+            details 
+        });
+    } catch (e) { console.error("Erro ao salvar log", e); }
+  };
+
+  const handleUserLogin = (user) => { 
+    setCurrentUser(user); 
+  };
+  // Hook para logar o login assim que o usuário for setado
+  useEffect(() => {
+      if (currentUser) addLog("LOGIN", "Usuário acessou o sistema");
+  }, [currentUser]);
   
   const callGemini = async (prompt) => {
     try {
@@ -293,16 +334,16 @@ export default function NugepSys() {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       const text = e.target.result;
       const lines = text.split('\n');
       const dataLines = lines.slice(1).filter(line => line.trim() !== '');
       
-      const importedArtifacts = dataLines.map((line, index) => {
+      let count = 0;
+      for (const line of dataLines) {
         const cols = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(col => col.trim().replace(/^"|"$/g, ''));
-        return {
-          id: Date.now() + index,
-          regNumber: cols[0] || `IMP-${Date.now()}-${index}`,
+        const newArt = {
+          regNumber: cols[0] || `IMP-${Date.now()}-${count}`,
           title: cols[1] || 'Sem Título',
           artist: cols[2] || 'Desconhecido',
           year: cols[3] || 'S/D',
@@ -319,209 +360,205 @@ export default function NugepSys() {
           createdBy: currentUser.name,
           createdAt: new Date().toISOString(),
           customFields: [],
-          movements: [{ id: Date.now() + index, date: new Date().toISOString().slice(0,10), type: "Importação em Massa", from: "Externo", to: cols[6] || 'Reserva Técnica', responsible: currentUser.name }],
+          movements: [{ date: new Date().toISOString().slice(0,10), type: "Importação em Massa", from: "Externo", to: cols[6] || 'Reserva Técnica', responsible: currentUser.name }],
           interventions: []
         };
-      });
+        
+        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'collection_items'), newArt);
+        count++;
+      }
 
-      setArtifacts(prev => [...prev, ...importedArtifacts]);
-      addLog("IMPORT", `Importou ${importedArtifacts.length} fichas via CSV`);
-      alert(`Sucesso! ${importedArtifacts.length} novas obras foram adicionadas ao acervo.`);
+      addLog("IMPORT", `Importou ${count} fichas via CSV`);
+      alert(`Sucesso! ${count} novas obras foram adicionadas ao acervo.`);
       if (fileInputRef.current) fileInputRef.current.value = "";
     };
     reader.readAsText(file);
   };
 
-  // --- LÓGICA DE EXPOSIÇÕES (CORRIGIDA) ---
+  // --- LÓGICA DE EXPOSIÇÕES ---
   
-  // Função auxiliar para recalcular status com base no histórico
   const calculateArtifactStatus = (artifact) => {
     const today = new Date().toISOString().slice(0,10);
-    // Filtra exposições que ainda estão ativas ou são futuras (Data Fim >= Hoje)
-    const activeExhibitions = artifact.exhibitionHistory.filter(ex => ex.endDate >= today);
+    const activeExhibitions = artifact.exhibitionHistory ? artifact.exhibitionHistory.filter(ex => ex.endDate >= today) : [];
 
     if (activeExhibitions.length > 0) {
-      // Se tiver exposição ativa/futura
-      // Pegamos a mais recente (última adicionada ou ordenamos por data)
-      // Aqui assumimos a última da lista filtrada como a vigente
       const currentEx = activeExhibitions[activeExhibitions.length - 1];
       return {
         status: 'Exposto',
         location: currentEx.location,
-        exhibition: currentEx.name // Atualiza o nome da exposição principal para visualização
+        exhibition: currentEx.name
       };
     } else {
-      // Se não tiver exposição ativa, volta para Armazenado
-      // Mantém localização atual se não for alterada explicitamente, mas por padrão volta pra Reserva
       return {
         status: 'Armazenado',
-        location: 'Reserva Técnica A', // Default seguro
+        location: 'Reserva Técnica A',
         exhibition: ''
       };
     }
   };
 
-  const handleCreateExhibition = (e) => {
+  const handleCreateExhibition = async (e) => {
     e.preventDefault();
-    const exhibition = { ...newExhibition, id: Date.now() };
-    setExhibitions([...exhibitions, exhibition]);
-    setIsExhibitionModalOpen(false);
-    setNewExhibition({ name: '', startDate: '', endDate: '', location: '', curator: '' });
-    addLog("EXPOSICAO", `Criou exposição: ${exhibition.name}`);
+    try {
+        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'exhibitions'), newExhibition);
+        setIsExhibitionModalOpen(false);
+        setNewExhibition({ name: '', startDate: '', endDate: '', location: '', curator: '' });
+        addLog("EXPOSICAO", `Criou exposição: ${newExhibition.name}`);
+    } catch (err) {
+        alert("Erro ao criar exposição.");
+        console.error(err);
+    }
   };
 
-  const handleDeleteExhibition = (e, id, name) => {
+  const handleDeleteExhibition = async (e, id, name) => {
     e.stopPropagation();
     if (window.confirm(`ATENÇÃO: Deseja excluir a exposição "${name}"?\n\nO registro será removido do histórico de todas as obras.`)) {
-      const updatedArtifacts = artifacts.map(art => {
-        // Remove a exposição do histórico
-        const newHistory = art.exhibitionHistory ? art.exhibitionHistory.filter(h => h.name !== name) : [];
-        
-        // Cria objeto temporário para recalcular status
-        const tempArt = { ...art, exhibitionHistory: newHistory };
-        const statusUpdate = calculateArtifactStatus(tempArt);
+      
+      const artifactsToUpdate = artifacts.filter(art => art.exhibitionHistory?.some(h => h.name === name));
+      
+      for (const art of artifactsToUpdate) {
+          const newHistory = art.exhibitionHistory.filter(h => h.name !== name);
+          const tempArt = { ...art, exhibitionHistory: newHistory };
+          const statusUpdate = calculateArtifactStatus(tempArt);
+          
+          let newMovements = art.movements;
+          if (statusUpdate.status === 'Armazenado' && art.status === 'Exposto') {
+              newMovements = [{ 
+                  date: new Date().toISOString().slice(0,10), 
+                  type: "Retorno de Exposição (Excluída)", 
+                  from: name, 
+                  to: statusUpdate.location, 
+                  responsible: currentUser.name 
+              }, ...(art.movements || [])];
+          }
 
-        return { 
-          ...art, 
-          exhibitionHistory: newHistory,
-          ...statusUpdate,
-          movements: statusUpdate.status === 'Armazenado' && art.status === 'Exposto' ? 
-            [{ id: Date.now(), date: new Date().toISOString().slice(0,10), type: "Retorno de Exposição (Excluída)", from: name, to: statusUpdate.location, responsible: currentUser.name }, ...art.movements]
-            : art.movements
-        };
-      });
-      setArtifacts(updatedArtifacts);
-      setExhibitions(exhibitions.filter(ex => ex.id !== id));
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'collection_items', art.id), {
+              exhibitionHistory: newHistory,
+              movements: newMovements,
+              ...statusUpdate
+          });
+      }
+
+      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'exhibitions', id));
       addLog("EXPOSICAO", `Excluiu a exposição: ${name}`);
     }
   };
 
-  // ADICIONAR OBRA A EXPOSIÇÃO (Lógica Atualizada)
-  const addArtifactToExhibition = (artifactId, exhibition) => {
-    const updated = artifacts.map(art => {
-      if (art.id === artifactId) {
-        // Verifica se já está nessa exposição para não duplicar
-        const alreadyIn = art.exhibitionHistory?.some(h => h.name === exhibition.name);
-        if (alreadyIn) {
-          alert("Esta obra já está registrada nesta exposição.");
-          return art;
-        }
+  const addArtifactToExhibition = async (artifactId, exhibition) => {
+      const art = artifacts.find(a => a.id === artifactId);
+      if (!art) return;
 
-        // Adiciona ao histórico
-        const newHistory = [...(art.exhibitionHistory || []), {
-          id: exhibition.id,
-          name: exhibition.name,
-          startDate: exhibition.startDate,
-          endDate: exhibition.endDate,
-          location: exhibition.location
-        }];
-
-        // Recalcula status
-        const tempArt = { ...art, exhibitionHistory: newHistory };
-        const statusUpdate = calculateArtifactStatus(tempArt);
-
-        // Gera movimento se mudou de local/status
-        let newMovements = art.movements;
-        if (statusUpdate.status === 'Exposto' && art.status !== 'Exposto') {
-             newMovements = [{ id: Date.now(), date: new Date().toISOString().slice(0,10), type: "Montagem Exposição", from: art.location, to: exhibition.location, responsible: currentUser.name }, ...art.movements];
-             alert(`Obra adicionada à exposição!\nStatus: Exposto\nLocal: ${exhibition.location}`);
-        } else if (statusUpdate.status === 'Exposto' && art.status === 'Exposto') {
-             // Já estava exposta, mas talvez mudou de exposição vigente
-             if (art.location !== exhibition.location) {
-                newMovements = [{ id: Date.now(), date: new Date().toISOString().slice(0,10), type: "Trânsito Entre Exposições", from: art.location, to: exhibition.location, responsible: currentUser.name }, ...art.movements];
-             }
-             alert("Obra adicionada ao histórico da exposição.\n(Mantém status Exposto)");
-        } else {
-             alert(`Obra registrada no histórico da exposição antiga "${exhibition.name}".\nStatus permanece: ${art.status} (Pois a exposição já terminou).`);
-        }
-
-        return { ...art, exhibitionHistory: newHistory, movements: newMovements, ...statusUpdate };
+      const alreadyIn = art.exhibitionHistory?.some(h => h.name === exhibition.name);
+      if (alreadyIn) {
+        alert("Esta obra já está registrada nesta exposição.");
+        return;
       }
-      return art;
-    });
-    setArtifacts(updated);
-    addLog("EXPOSICAO", `Adicionou obra ${artifactId} ao histórico da exposição ${exhibition.name}`);
+
+      const newHistory = [...(art.exhibitionHistory || []), {
+        id: exhibition.id,
+        name: exhibition.name,
+        startDate: exhibition.startDate,
+        endDate: exhibition.endDate,
+        location: exhibition.location
+      }];
+
+      const tempArt = { ...art, exhibitionHistory: newHistory };
+      const statusUpdate = calculateArtifactStatus(tempArt);
+
+      let newMovements = art.movements || [];
+      if (statusUpdate.status === 'Exposto' && art.status !== 'Exposto') {
+            newMovements = [{ date: new Date().toISOString().slice(0,10), type: "Montagem Exposição", from: art.location, to: exhibition.location, responsible: currentUser.name }, ...newMovements];
+            alert(`Obra adicionada à exposição!\nStatus: Exposto\nLocal: ${exhibition.location}`);
+      } else if (statusUpdate.status === 'Exposto' && art.status === 'Exposto') {
+            if (art.location !== exhibition.location) {
+              newMovements = [{ date: new Date().toISOString().slice(0,10), type: "Trânsito Entre Exposições", from: art.location, to: exhibition.location, responsible: currentUser.name }, ...newMovements];
+            }
+            alert("Obra adicionada ao histórico da exposição.\n(Mantém status Exposto)");
+      } else {
+            alert(`Obra registrada no histórico da exposição antiga "${exhibition.name}".\nStatus permanece: ${art.status} (Pois a exposição já terminou).`);
+      }
+
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'collection_items', art.id), {
+          exhibitionHistory: newHistory,
+          movements: newMovements,
+          ...statusUpdate
+      });
+      addLog("EXPOSICAO", `Adicionou obra ${art.regNumber} ao histórico da exposição ${exhibition.name}`);
   };
 
-  // REMOVER OBRA DE EXPOSIÇÃO (Lógica Atualizada)
-  const removeArtifactFromExhibition = (artifactId, exhibitionName) => {
-    // Se não passar exhibitionName, remove a atual (compatibilidade)
-    const updated = artifacts.map(art => {
-      if (art.id === artifactId) {
-        const targetExName = exhibitionName || art.exhibition;
-        
-        // Filtra histórico
-        const newHistory = art.exhibitionHistory ? art.exhibitionHistory.filter(h => h.name !== targetExName) : [];
-        
-        // Recalcula
-        const tempArt = { ...art, exhibitionHistory: newHistory };
-        const statusUpdate = calculateArtifactStatus(tempArt);
+  const removeArtifactFromExhibition = async (artifactId, exhibitionName) => {
+    const art = artifacts.find(a => a.id === artifactId);
+    if (!art) return;
 
-        // Movimento de retorno se deixou de ser exposto
-        let newMovements = art.movements;
-        if (art.status === 'Exposto' && statusUpdate.status === 'Armazenado') {
-           newMovements = [{ id: Date.now(), date: new Date().toISOString().slice(0,10), type: "Desmontagem Exposição", from: art.location, to: statusUpdate.location, responsible: currentUser.name }, ...art.movements];
-        }
+    const targetExName = exhibitionName || art.exhibition;
+    const newHistory = art.exhibitionHistory ? art.exhibitionHistory.filter(h => h.name !== targetExName) : [];
+    
+    const tempArt = { ...art, exhibitionHistory: newHistory };
+    const statusUpdate = calculateArtifactStatus(tempArt);
 
-        return { ...art, exhibitionHistory: newHistory, movements: newMovements, ...statusUpdate };
-      }
-      return art;
+    let newMovements = art.movements || [];
+    if (art.status === 'Exposto' && statusUpdate.status === 'Armazenado') {
+        newMovements = [{ date: new Date().toISOString().slice(0,10), type: "Desmontagem Exposição", from: art.location, to: statusUpdate.location, responsible: currentUser.name }, ...newMovements];
+    }
+
+    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'collection_items', art.id), {
+        exhibitionHistory: newHistory,
+        movements: newMovements,
+        ...statusUpdate
     });
-    setArtifacts(updated);
-    addLog("EXPOSICAO", `Removeu obra ${artifactId} da exposição ${exhibitionName || 'Atual'}`);
+    addLog("EXPOSICAO", `Removeu obra ${art.regNumber} da exposição ${exhibitionName || 'Atual'}`);
   };
 
-  // --- LÓGICA DE MOVIMENTAÇÃO (ATUALIZADA) ---
-  const handleRegisterMovement = (e) => {
+  // --- LÓGICA DE MOVIMENTAÇÃO ---
+  const handleRegisterMovement = async (e) => {
     e.preventDefault();
     if (!newMovement.artifactId) return alert("Selecione uma obra.");
     
-    const updatedArtifacts = artifacts.map(art => {
-      if (art.id == newMovement.artifactId) {
-        let newLocation = art.location;
-        let newStatus = art.status;
-        const dest = newMovement.to;
+    const art = artifacts.find(a => a.id === newMovement.artifactId);
+    if (!art) return;
 
-        switch (newMovement.type) {
-          case 'Trânsito Interno':
-            if (dest) newLocation = dest;
-            break;
-          case 'Empréstimo (Saída)':
-          case 'Saída': 
-            newLocation = 'Externo'; 
-            newStatus = 'Empréstimo'; 
-            break;
-          case 'Empréstimo (Entrada)':
-          case 'Entrada': // Entende-se 'Entrada' como retorno de empréstimo ou doação
-            if (dest) newLocation = dest;
-            newStatus = 'Armazenado'; 
-            break;
-          case 'Saída para Restauro':
-            newLocation = 'Laboratório de Restauro'; 
-            newStatus = 'Em Restauração';
-            if (dest) newLocation = dest; // Permite override se for para um laboratório externo específico
-            break;
-          case 'Retorno de Restauro':
-            if (dest) newLocation = dest;
-            newStatus = 'Armazenado'; 
-            break;
-          default:
-            if (dest) newLocation = dest;
-            break;
-        }
+    let newLocation = art.location;
+    let newStatus = art.status;
+    const dest = newMovement.to;
 
-        return { 
-            ...art, 
-            location: newLocation, 
-            status: newStatus, 
-            movements: [{ ...newMovement, id: Date.now(), to: newLocation }, ...art.movements] 
-        };
-      }
-      return art;
+    switch (newMovement.type) {
+        case 'Trânsito Interno':
+        if (dest) newLocation = dest;
+        break;
+        case 'Empréstimo (Saída)':
+        case 'Saída': 
+        newLocation = 'Externo'; 
+        newStatus = 'Empréstimo'; 
+        break;
+        case 'Empréstimo (Entrada)':
+        case 'Entrada': 
+        if (dest) newLocation = dest;
+        newStatus = 'Armazenado'; 
+        break;
+        case 'Saída para Restauro':
+        newLocation = 'Laboratório de Restauro'; 
+        newStatus = 'Em Restauração';
+        if (dest) newLocation = dest; 
+        break;
+        case 'Retorno de Restauro':
+        if (dest) newLocation = dest;
+        newStatus = 'Armazenado'; 
+        break;
+        default:
+        if (dest) newLocation = dest;
+        break;
+    }
+
+    const movementRecord = { ...newMovement, to: newLocation };
+    const updatedMovements = [movementRecord, ...(art.movements || [])];
+
+    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'collection_items', art.id), {
+        location: newLocation,
+        status: newStatus,
+        movements: updatedMovements
     });
 
-    setArtifacts(updatedArtifacts);
-    addLog("MOVIMENTACAO", `${newMovement.type} da obra ID ${newMovement.artifactId}`);
+    addLog("MOVIMENTACAO", `${newMovement.type} da obra ID ${art.regNumber}`);
     setIsMovementModalOpen(false);
     setNewMovement({ artifactId: '', type: 'Trânsito Interno', from: '', to: '', responsible: '', date: new Date().toISOString().slice(0,10) });
     alert("Movimentação registrada com sucesso.");
@@ -533,18 +570,32 @@ export default function NugepSys() {
     else setSelectedForConservation([...selectedForConservation, id]);
   };
 
-  const moveToConservationQueue = (queueName) => {
+  const moveToConservationQueue = async (queueName) => {
     if (selectedForConservation.length === 0) return alert("Selecione pelo menos uma obra.");
-    const updatedArtifacts = artifacts.map(art => {
-      if (selectedForConservation.includes(art.id)) {
-        return { ...art, conservationQueue: queueName, status: queueName === 'Em Tratamento' ? 'Em Restauração' : art.status };
-      }
-      return art;
-    });
-    setArtifacts(updatedArtifacts);
+    
+    for (const id of selectedForConservation) {
+        const art = artifacts.find(a => a.id === id);
+        if (art) {
+            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'collection_items', id), {
+                conservationQueue: queueName,
+                status: queueName === 'Em Tratamento' ? 'Em Restauração' : art.status
+            });
+        }
+    }
+    
     addLog("CONSERVACAO", `Moveu ${selectedForConservation.length} obras para ${queueName}`);
     setSelectedForConservation([]);
     alert(`Obras encaminhadas para: ${queueName}`);
+  };
+
+  const removeFromConservationQueue = async (id) => {
+      const art = artifacts.find(a => a.id === id);
+      if (art) {
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'collection_items', id), {
+              conservationQueue: null
+          });
+          addLog("CONSERVACAO", `Removeu ${art.regNumber} da fila`);
+      }
   };
 
   // --- Demais Funções ---
@@ -562,7 +613,6 @@ export default function NugepSys() {
   
   const handleImageUpload = (e) => { const file = e.target.files[0]; if (file) { const reader = new FileReader(); reader.onloadend = () => setNewArtifact(prev => ({ ...prev, image: reader.result })); reader.readAsDataURL(file); } };
   
-  // Função para abrir o modo de edição
   const handleEditArtifact = (artifact) => {
     setNewArtifact(artifact); 
     setIsEditing(true); 
@@ -570,39 +620,33 @@ export default function NugepSys() {
     setSelectedArtifact(null); 
   };
 
-  // Função para salvar (Criar ou Editar)
-  const handleSaveArtifact = (e) => { 
+  const handleSaveArtifact = async (e) => { 
     e.preventDefault(); 
-    
-    if (isEditing) {
-      // Lógica de Edição
-      const updatedArtifacts = artifacts.map(art => {
-        if (art.id === newArtifact.id) {
-          return { ...art, ...newArtifact }; 
+    try {
+        if (isEditing) {
+            const artRef = doc(db, 'artifacts', appId, 'public', 'data', 'collection_items', newArtifact.id);
+            await updateDoc(artRef, newArtifact);
+            addLog("EDICAO", `Editou ficha: ${newArtifact.title}`);
+            alert("Ficha atualizada com sucesso!");
+        } else {
+            const artifact = { 
+                ...newArtifact, 
+                createdBy: currentUser.name, 
+                createdAt: new Date().toISOString(), 
+                movements: [{ date: new Date().toISOString().slice(0,10), type: "Entrada Inicial", from: "Externo", to: newArtifact.location, responsible: currentUser.name }], 
+                interventions: [] 
+            }; 
+            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'collection_items'), artifact);
+            addLog("CADASTRO", `Nova ficha: ${artifact.title}`);
+            alert("Ficha catalogada com sucesso!"); 
         }
-        return art;
-      });
-      setArtifacts(updatedArtifacts);
-      addLog("EDICAO", `Editou ficha: ${newArtifact.title}`);
-      alert("Ficha atualizada com sucesso!");
-    } else {
-      // Lógica de Criação
-      const artifact = { 
-        ...newArtifact, 
-        id: Date.now(), 
-        createdBy: currentUser.name, 
-        createdAt: new Date().toISOString(), 
-        movements: [{ date: new Date().toISOString().slice(0,10), type: "Entrada Inicial", from: "Externo", to: newArtifact.location, responsible: currentUser.name }], 
-        interventions: [] 
-      }; 
-      setArtifacts([...artifacts, artifact]); 
-      addLog("CADASTRO", `Nova ficha: ${artifact.title}`);
-      alert("Ficha catalogada com sucesso!"); 
+        setNewArtifact({ regNumber: '', title: '', artist: '', year: '', type: 'Pintura', status: 'Armazenado', condition: 'Bom', location: 'Reserva Técnica A', exhibition: '', image: '', description: '', observations: '', customFields: [], relatedTo: '', provenance: '', copyright: '', audioDesc: '', exhibitionHistory: [] }); 
+        setIsEditing(false);
+        setActiveTab('collection'); 
+    } catch (err) {
+        console.error("Erro ao salvar:", err);
+        alert("Erro ao salvar dados.");
     }
-
-    setNewArtifact({ regNumber: '', title: '', artist: '', year: '', type: 'Pintura', status: 'Armazenado', condition: 'Bom', location: 'Reserva Técnica A', exhibition: '', image: '', description: '', observations: '', customFields: [], relatedTo: '', provenance: '', copyright: '', audioDesc: '', exhibitionHistory: [] }); 
-    setIsEditing(false);
-    setActiveTab('collection'); 
   };
   
   const handleCancelEdit = () => {
@@ -611,14 +655,32 @@ export default function NugepSys() {
     setActiveTab('collection');
   };
 
-  const handleDelete = (id, title) => { if (currentUser.role !== 'Administrador') { return alert("Apenas Administradores podem arquivar."); } if (window.confirm("Arquivar?")) { setArtifacts(artifacts.filter(a => a.id !== id)); setSelectedArtifact(null); addLog("REMOCAO", `Arquivou: ${title}`); } };
+  // --- FUNÇÃO DE EXCLUSÃO (ATUALIZADA) ---
+  const handleDelete = async (id, title) => { 
+      // Verifica se o usuário tem "Admin" no papel
+      if (currentUser.role !== 'Administrador') { 
+          return alert("Acesso Negado: Apenas Administradores podem excluir fichas.\n\nDica: Seu usuário deve conter 'admin' no nome para ter essa permissão."); 
+      } 
+      
+      if (window.confirm(`Tem certeza que deseja arquivar permanentemente a obra "${title}"?`)) { 
+          try {
+            await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'collection_items', id));
+            setSelectedArtifact(null); 
+            addLog("REMOCAO", `Arquivou: ${title}`); 
+          } catch (e) {
+            console.error(e);
+            alert("Erro ao excluir. Verifique sua conexão.");
+          }
+      } 
+  };
+  
   const handleGenerateDescription = async () => { if (!newArtifact.title) return alert("Preencha o título."); setIsGeneratingDesc(true); const desc = await callGemini(`Descrição técnica (PT-BR) para: "${newArtifact.title}" de "${newArtifact.artist}".`); if (desc) setNewArtifact(prev => ({ ...prev, description: desc })); setIsGeneratingDesc(false); };
   
   const uniqueLocations = [...new Set(artifacts.map(a => a.location))];
   const uniqueTypes = [...new Set(artifacts.map(a => a.type))];
 
   const filteredArtifacts = artifacts.filter(art => {
-    const matchesSearch = art.title.toLowerCase().includes(searchTerm.toLowerCase()) || art.regNumber.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = art.title?.toLowerCase().includes(searchTerm.toLowerCase()) || art.regNumber?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesLocation = filters.location ? art.location === filters.location : true;
     const matchesType = filters.type ? art.type === filters.type : true;
     return matchesSearch && matchesLocation && matchesType;
@@ -626,6 +688,7 @@ export default function NugepSys() {
   const locationData = {}; artifacts.forEach(a => { locationData[a.location] = (locationData[a.location] || 0) + 1; });
 
   if (!currentUser) return (<><style>{printStyles}</style><LoginScreen onLogin={handleUserLogin} /></>);
+  if (!firebaseUser) return (<div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin text-blue-600" size={40}/><span className="ml-2 text-slate-600">Conectando ao Banco de Dados...</span></div>);
 
   return (
     <div className="flex h-screen bg-slate-50 font-sans text-slate-900">
@@ -690,7 +753,7 @@ export default function NugepSys() {
             {activeTab === 'analysis' && <><Sparkles className="text-indigo-500"/> Inteligência de Dados</>}
           </h1>
           <div className="flex items-center gap-2 text-xs font-medium text-slate-500 bg-slate-100 px-3 py-1.5 rounded-full">
-            <ShieldCheck size={14} className="text-green-600" /> Ambiente Seguro
+            <ShieldCheck size={14} className="text-green-600" /> Ambiente Seguro - Cloud
           </div>
         </header>
 
@@ -788,6 +851,7 @@ export default function NugepSys() {
                       <tr><th className="px-6 py-4">Obra</th><th className="px-6 py-4">Localização & Tipo</th><th className="px-6 py-4">Status</th><th className="px-6 py-4 text-right">Ações</th></tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
+                      {filteredArtifacts.length === 0 && <tr><td colSpan="4" className="p-8 text-center text-slate-400">Nenhuma obra cadastrada ou encontrada.</td></tr>}
                       {filteredArtifacts.map((art) => (
                         <tr key={art.id} className="hover:bg-green-50/50 cursor-pointer group transition-colors" onClick={() => { setSelectedArtifact(art); setDetailTab('geral'); }}>
                           <td className="px-6 py-4">
@@ -820,6 +884,8 @@ export default function NugepSys() {
                           <td className="px-6 py-4 text-right">
                             <div className="flex justify-end gap-2">
                               <button onClick={(e) => { e.stopPropagation(); handleEditArtifact(art); }} className="text-blue-500 hover:bg-blue-50 p-2 rounded-lg transition-colors" title="Editar Ficha"><Pencil size={18}/></button>
+                              {/* Botão de Excluir adicionado na lista */}
+                              <button onClick={(e) => { e.stopPropagation(); handleDelete(art.id, art.title); }} className="text-red-400 hover:bg-red-50 p-2 rounded-lg transition-colors" title="Excluir Ficha"><Trash2 size={18}/></button>
                               <button onClick={(e) => { e.stopPropagation(); setSelectedArtifact(art); setDetailTab('geral'); }} className="text-green-600 hover:bg-green-50 p-2 rounded-lg transition-colors"><Maximize2 size={18} /></button>
                             </div>
                           </td>
@@ -880,6 +946,7 @@ export default function NugepSys() {
                         </div>
                       </div>
                     ))}
+                    {exhibitions.length === 0 && <p className="col-span-3 text-center text-slate-400 p-10">Nenhuma exposição criada.</p>}
                   </div>
                 </>
               ) : (
@@ -1049,7 +1116,7 @@ export default function NugepSys() {
                   <table className="w-full text-sm text-left">
                     <thead className="bg-slate-50 text-slate-500 uppercase text-xs"><tr><th className="p-3">Data</th><th className="p-3">Obra</th><th className="p-3">Tipo</th><th className="p-3">Destino</th><th className="p-3">Responsável</th></tr></thead>
                     <tbody>
-                      {artifacts.flatMap(a => a.movements.map(m => ({...m, artwork: a.title}))).sort((a,b) => new Date(b.date) - new Date(a.date)).slice(0, 5).map((m, i) => (
+                      {artifacts.flatMap(a => (a.movements || []).map(m => ({...m, artwork: a.title}))).sort((a,b) => new Date(b.date) - new Date(a.date)).slice(0, 5).map((m, i) => (
                         <tr key={i} className="border-b hover:bg-slate-50">
                           <td className="p-3 font-mono text-xs">{m.date}</td>
                           <td className="p-3 font-bold text-slate-700">{m.artwork}</td>
@@ -1131,11 +1198,7 @@ export default function NugepSys() {
                           </td>
                           <td className="p-3 text-right">
                             {a.conservationQueue && (
-                              <button onClick={() => {
-                                const updated = artifacts.map(art => art.id === a.id ? {...art, conservationQueue: null} : art);
-                                setArtifacts(updated);
-                                addLog("CONSERVACAO", `Removeu ${a.title} da fila`);
-                              }} className="text-slate-400 hover:text-red-500 text-xs underline">Remover da Fila</button>
+                              <button onClick={() => removeFromConservationQueue(a.id)} className="text-slate-400 hover:text-red-500 text-xs underline">Remover da Fila</button>
                             )}
                           </td>
                         </tr>
