@@ -41,8 +41,9 @@ const db = getFirestore(app);
 const appId = 'nugep-oficial'; 
 
 // --- Configuração da API do Gemini (IA) ---
-const apiKey = "AIzaSyAU7GeYCAIGkxnzORX53S2WjdT1p2VhnZE"; 
-const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+// CORREÇÃO: Utilizando modelo suportado no ambiente (2.5 Flash Preview) e chave do sistema
+const apiKey = ""; 
+const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
 // --- CÓDIGO MESTRE DA INSTITUIÇÃO ---
 const INSTITUTION_ACCESS_CODE = "NUGEP2025"; 
@@ -305,11 +306,42 @@ export default function NugepSys() {
       if (currentUser) addLog("LOGIN", "Usuário acessou o sistema");
   }, [currentUser]);
   
-  const callGemini = async (prompt) => {
+  // CORREÇÃO: Função genérica aprimorada para suportar JSON Mode
+  const callGemini = async (prompt, jsonMode = false) => {
     try {
-      const response = await fetch(GEMINI_API_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
-      const data = await response.json(); return data.candidates[0].content.parts[0].text;
-    } catch (error) { console.error("Erro API:", error); return null; }
+      const body = {
+        contents: [{ parts: [{ text: prompt }] }],
+        // Adiciona configuração para forçar resposta JSON quando necessário
+        generationConfig: jsonMode ? { responseMimeType: "application/json" } : undefined
+      };
+
+      const response = await fetch(GEMINI_API_URL, { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify(body) 
+      });
+
+      // CORREÇÃO: Verificação de erro HTTP
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error("Erro HTTP Gemini:", response.status, errorData);
+        throw new Error(`Erro API (${response.status})`);
+      }
+
+      const data = await response.json(); 
+      
+      // CORREÇÃO: Verificação segura da estrutura da resposta
+      if (data.candidates && data.candidates.length > 0 && data.candidates[0].content) {
+        return data.candidates[0].content.parts[0].text;
+      } else {
+        console.warn("Resposta Gemini sem candidatos:", data);
+        return null;
+      }
+
+    } catch (error) { 
+      console.error("Erro API:", error); 
+      return null; 
+    }
   };
 
   const exportToCSV = () => {
@@ -601,11 +633,45 @@ export default function NugepSys() {
   // --- Demais Funções ---
   const handlePrintCard = () => { addLog("EXPORT_FICHA", `Imprimiu ficha: ${selectedArtifact.regNumber}`); window.print(); };
   
+  // CORREÇÃO: Função de análise robusta com JSON nativo e prompt estruturado
   const handleRunAnalysis = async (e) => {
-    e.preventDefault(); if (!analysisInput.trim()) return; setIsAnalyzing(true);
+    e.preventDefault(); 
+    if (!analysisInput.trim()) return; 
+    setIsAnalyzing(true);
+    
+    // Mapeamos apenas os campos essenciais para economizar tokens
     const context = JSON.stringify(artifacts.map(a => ({ title: a.title, year: a.year, type: a.type, status: a.status, condition: a.condition })));
-    const prompt = `Analista NUGEP. Acervo JSON: ${context}. Pergunta: "${analysisInput}". JSON: {"text": "texto corrido", "chartData": [{"label": "A", "value": 10, "color": "bg-orange-500"}], "chartTitle": "Titulo"}.`;
-    try { let resultText = await callGemini(prompt); resultText = resultText.replace(/```json/g, '').replace(/```/g, ''); setAnalysisResult(JSON.parse(resultText)); } catch (err) { alert("Erro ao gerar análise."); } setIsAnalyzing(false);
+    
+    const prompt = `
+      Atue como um Especialista em Museologia e Ciência de Dados do NUGEP porém não citando isso.
+      Analise os dados do acervo fornecidos abaixo e responda à pergunta do usuário.
+      
+      DADOS DO ACERVO: ${context}
+      PERGUNTA DO USUÁRIO: "${analysisInput}"
+      
+      Responda EXCLUSIVAMENTE em formato JSON seguindo este schema:
+      {
+        "text": "Sua análise qualitativa e insights museológicos em texto corrido (PT-BR).",
+        "chartTitle": "Um título curto para o gráfico (opcional)",
+        "chartData": [
+          {"label": "Categoria Exemplo", "value": 10, "color": "bg-blue-500"}
+        ]
+      }
+    `;
+
+    try { 
+      // Chamamos o Gemini com o modo JSON ativado (segundo parametro true)
+      let resultText = await callGemini(prompt, true); 
+      
+      if (resultText) {
+          // O parse agora é seguro pois a IA foi forçada a responder JSON
+          setAnalysisResult(JSON.parse(resultText)); 
+      }
+    } catch (err) { 
+      console.error(err);
+      alert("Erro ao gerar análise. Tente novamente."); 
+    } 
+    setIsAnalyzing(false);
   };
   
   const addCustomField = () => { if (tempCustomField.label && tempCustomField.value) { setNewArtifact(prev => ({ ...prev, customFields: [...prev.customFields, tempCustomField] })); setTempCustomField({ label: '', value: '' }); } };
