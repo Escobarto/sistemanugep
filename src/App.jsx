@@ -42,7 +42,7 @@ const appId = 'nugep-oficial';
 
 // --- Configuração da API do Gemini (IA) ---
 const apiKey = "AIzaSyAU7GeYCAIGkxnzORX53S2WjdT1p2VhnZE"; 
-const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
 // --- CÓDIGO MESTRE DA INSTITUIÇÃO ---
 const INSTITUTION_ACCESS_CODE = "NUGEP2025"; 
