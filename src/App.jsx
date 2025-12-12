@@ -8,7 +8,7 @@ import {
   FileSpreadsheet, QrCode, Truck, Stethoscope, Eye, Camera, 
   Copyright, Archive, AlertTriangle, ArrowRight, ClipboardList, 
   GalleryVerticalEnd, Calendar, MapPin, MoveRight, MoveLeft, 
-  KeyRound, Pencil, FileInput, List
+  KeyRound, Pencil, FileInput, List, Box, Grid, UserCheck
 } from 'lucide-react';
 
 // --- IMPORTAÇÕES DO FIREBASE ---
@@ -41,7 +41,6 @@ const db = getFirestore(app);
 const appId = 'nugep-oficial'; 
 
 // --- Configuração da API do Gemini (IA) ---
-// CORREÇÃO: Utilizando modelo suportado no ambiente (2.5 Flash Preview) e chave do sistema
 const apiKey = ""; 
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
@@ -177,12 +176,13 @@ export default function NugepSys() {
   const [systemLogs, setSystemLogs] = useState([]);
   const [exhibitions, setExhibitions] = useState([]);
   const [artifacts, setArtifacts] = useState([]);
+  const [locations, setLocations] = useState([]); // NOVO ESTADO PARA LOCAIS/SETORES
 
   const [selectedArtifact, setSelectedArtifact] = useState(null);
   const [detailTab, setDetailTab] = useState('geral');
   const fileInputRef = useRef(null); 
 
-  // Estados de Edição
+  // Estados de Edição de Ficha
   const [isEditing, setIsEditing] = useState(false);
 
   // Estados Movimentação
@@ -192,9 +192,17 @@ export default function NugepSys() {
   // Estados Conservação
   const [selectedForConservation, setSelectedForConservation] = useState([]);
 
+  // Estados Exposições
   const [selectedExhibition, setSelectedExhibition] = useState(null);
   const [newExhibition, setNewExhibition] = useState({ name: '', startDate: '', endDate: '', location: '', curator: '' });
   const [isExhibitionModalOpen, setIsExhibitionModalOpen] = useState(false);
+  const [editingExhibitionId, setEditingExhibitionId] = useState(null); // Estado para ID da exposição sendo editada
+
+  // Estados para Gestão de Locais (NOVO)
+  const [newLocationName, setNewLocationName] = useState('');
+  const [newLocationType, setNewLocationType] = useState('Reserva Técnica');
+  const [newLocationResponsible, setNewLocationResponsible] = useState(''); // NOVO: Responsável
+  const [editingLocationId, setEditingLocationId] = useState(null); // NOVO: ID do local sendo editado
 
   // Estados IA
   const [analysisInput, setAnalysisInput] = useState('');
@@ -213,8 +221,6 @@ export default function NugepSys() {
   // 1. Autenticação no Firebase (Necessário para acessar Firestore)
   useEffect(() => {
     const initAuth = async () => {
-      // Como estamos usando sua config, o token inicial do ambiente não serve mais.
-      // Tentamos login anônimo direto.
       try {
         await signInAnonymously(auth);
       } catch (error) {
@@ -242,10 +248,19 @@ export default function NugepSys() {
       },
       (error) => {
         console.error("Erro ao carregar acervo:", error);
-        if (error.code === 'permission-denied') {
-            alert("Erro de Permissão: O banco de dados foi criado, mas as regras de segurança impedem a leitura. Vá em 'Firestore Database > Regras' e permita leitura/escrita.");
-        }
       }
+    );
+
+    // Listener de Locais/Setores (NOVO)
+    const unsubLocations = onSnapshot(
+        collection(db, 'artifacts', appId, 'public', 'data', 'locations'),
+        (snapshot) => {
+            const loadedLocations = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            // Ordena alfabeticamente
+            loadedLocations.sort((a,b) => a.name.localeCompare(b.name));
+            setLocations(loadedLocations);
+        },
+        (error) => console.error("Erro ao carregar locais:", error)
     );
 
     // Listener de Exposições
@@ -258,17 +273,15 @@ export default function NugepSys() {
       (error) => console.error("Erro ao carregar exposições:", error)
     );
 
-    // Listener de Logs (Ordenado por data decrescente seria ideal, mas fazemos sort no client por regra do prompt de no-complex-queries)
+    // Listener de Logs
     const unsubLogs = onSnapshot(
       collection(db, 'artifacts', appId, 'public', 'data', 'system_logs'),
       (snapshot) => {
         const loadedLogs = snapshot.docs.map(doc => {
             const data = doc.data();
-            // Converter timestamp do firestore se existir, ou usar string
             const dateObj = data.timestamp && data.timestamp.toDate ? data.timestamp.toDate() : new Date(data.timestamp);
             return { id: doc.id, ...data, timestamp: dateObj };
         });
-        // Sort no cliente (mais novo primeiro)
         loadedLogs.sort((a, b) => b.timestamp - a.timestamp);
         setSystemLogs(loadedLogs);
       },
@@ -279,6 +292,7 @@ export default function NugepSys() {
       unsubArtifacts();
       unsubExhibitions();
       unsubLogs();
+      unsubLocations();
     };
   }, [firebaseUser]);
 
@@ -289,7 +303,7 @@ export default function NugepSys() {
     if (!firebaseUser) return;
     try {
         await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'system_logs'), {
-            timestamp: serverTimestamp(), // Usa hora do servidor
+            timestamp: serverTimestamp(),
             user: currentUser ? currentUser.name : 'Sistema', 
             role: currentUser ? currentUser.role : 'System', 
             action, 
@@ -301,17 +315,14 @@ export default function NugepSys() {
   const handleUserLogin = (user) => { 
     setCurrentUser(user); 
   };
-  // Hook para logar o login assim que o usuário for setado
   useEffect(() => {
       if (currentUser) addLog("LOGIN", "Usuário acessou o sistema");
   }, [currentUser]);
   
-  // CORREÇÃO: Função genérica aprimorada para suportar JSON Mode
   const callGemini = async (prompt, jsonMode = false) => {
     try {
       const body = {
         contents: [{ parts: [{ text: prompt }] }],
-        // Adiciona configuração para forçar resposta JSON quando necessário
         generationConfig: jsonMode ? { responseMimeType: "application/json" } : undefined
       };
 
@@ -321,23 +332,16 @@ export default function NugepSys() {
         body: JSON.stringify(body) 
       });
 
-      // CORREÇÃO: Verificação de erro HTTP
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error("Erro HTTP Gemini:", response.status, errorData);
         throw new Error(`Erro API (${response.status})`);
       }
 
       const data = await response.json(); 
-      
-      // CORREÇÃO: Verificação segura da estrutura da resposta
       if (data.candidates && data.candidates.length > 0 && data.candidates[0].content) {
         return data.candidates[0].content.parts[0].text;
       } else {
-        console.warn("Resposta Gemini sem candidatos:", data);
         return null;
       }
-
     } catch (error) { 
       console.error("Erro API:", error); 
       return null; 
@@ -407,8 +411,7 @@ export default function NugepSys() {
     reader.readAsText(file);
   };
 
-  // --- LÓGICA DE EXPOSIÇÕES ---
-  
+  // --- LÓGICA DE EXPOSIÇÕES (ATUALIZADA PARA EDIÇÃO) ---
   const calculateArtifactStatus = (artifact) => {
     const today = new Date().toISOString().slice(0,10);
     const activeExhibitions = artifact.exhibitionHistory ? artifact.exhibitionHistory.filter(ex => ex.endDate >= today) : [];
@@ -429,18 +432,38 @@ export default function NugepSys() {
     }
   };
 
-  const handleCreateExhibition = async (e) => {
+  // Agora função unificada para Salvar (Criar ou Editar)
+  const handleSaveExhibition = async (e) => {
     e.preventDefault();
     try {
-        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'exhibitions'), newExhibition);
+        if (editingExhibitionId) {
+            // Lógica de Edição
+            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'exhibitions', editingExhibitionId), newExhibition);
+            addLog("EXPOSICAO", `Editou exposição: ${newExhibition.name}`);
+        } else {
+            // Lógica de Criação
+            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'exhibitions'), newExhibition);
+            addLog("EXPOSICAO", `Criou exposição: ${newExhibition.name}`);
+        }
         setIsExhibitionModalOpen(false);
         setNewExhibition({ name: '', startDate: '', endDate: '', location: '', curator: '' });
-        addLog("EXPOSICAO", `Criou exposição: ${newExhibition.name}`);
+        setEditingExhibitionId(null);
     } catch (err) {
-        alert("Erro ao criar exposição.");
-        console.error(err);
+        alert("Erro ao salvar exposição.");
     }
   };
+
+  const handleEditExhibition = (ex) => {
+      setNewExhibition({
+          name: ex.name,
+          startDate: ex.startDate,
+          endDate: ex.endDate,
+          location: ex.location,
+          curator: ex.curator
+      });
+      setEditingExhibitionId(ex.id);
+      setIsExhibitionModalOpen(true);
+  }
 
   const handleDeleteExhibition = async (e, id, name) => {
     e.stopPropagation();
@@ -481,10 +504,7 @@ export default function NugepSys() {
       if (!art) return;
 
       const alreadyIn = art.exhibitionHistory?.some(h => h.name === exhibition.name);
-      if (alreadyIn) {
-        alert("Esta obra já está registrada nesta exposição.");
-        return;
-      }
+      if (alreadyIn) return alert("Esta obra já está registrada nesta exposição.");
 
       const newHistory = [...(art.exhibitionHistory || []), {
         id: exhibition.id,
@@ -596,6 +616,70 @@ export default function NugepSys() {
     alert("Movimentação registrada com sucesso.");
   };
 
+  // --- LÓGICA DE GESTÃO DE ESPAÇOS (ATUALIZADA PARA EDIÇÃO E RESPONSÁVEL) ---
+  const handleSaveLocation = async (e) => {
+      e.preventDefault();
+      if (!newLocationName.trim()) return;
+      
+      try {
+          if (editingLocationId) {
+             // Lógica de Edição
+             await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'locations', editingLocationId), {
+                name: newLocationName,
+                type: newLocationType,
+                responsible: newLocationResponsible, // Atualiza Responsável
+                updatedAt: serverTimestamp()
+             });
+             addLog("ADMIN", `Editou setor: ${newLocationName}`);
+          } else {
+             // Lógica de Criação
+             const exists = locations.some(l => l.name.toLowerCase() === newLocationName.toLowerCase());
+             if (exists) return alert("Já existe um setor com este nome.");
+
+             await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'locations'), {
+                name: newLocationName,
+                type: newLocationType,
+                responsible: newLocationResponsible, // Salva Responsável
+                createdAt: serverTimestamp()
+             });
+             addLog("ADMIN", `Criou novo setor: ${newLocationName}`);
+          }
+          // Limpa formulário
+          setNewLocationName('');
+          setNewLocationType('Reserva Técnica');
+          setNewLocationResponsible('');
+          setEditingLocationId(null);
+      } catch (err) {
+          console.error(err);
+          alert("Erro ao salvar setor.");
+      }
+  };
+
+  const handleEditLocation = (loc) => {
+      setNewLocationName(loc.name);
+      setNewLocationType(loc.type);
+      setNewLocationResponsible(loc.responsible || '');
+      setEditingLocationId(loc.id);
+  }
+
+  const handleCancelEditLocation = () => {
+      setNewLocationName('');
+      setNewLocationType('Reserva Técnica');
+      setNewLocationResponsible('');
+      setEditingLocationId(null);
+  }
+
+  const handleDeleteLocation = async (id, name) => {
+      if (window.confirm(`Deseja excluir o setor "${name}"? \n\nAtenção: Obras que estiverem neste local manterão o nome do local no registro, mas ele não aparecerá mais como opção de destino.`)) {
+          try {
+              await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'locations', id));
+              addLog("ADMIN", `Excluiu setor: ${name}`);
+          } catch(err) {
+              console.error(err);
+          }
+      }
+  }
+
   // --- LÓGICA DE CONSERVAÇÃO ---
   const toggleConservationSelection = (id) => {
     if (selectedForConservation.includes(id)) setSelectedForConservation(selectedForConservation.filter(itemId => itemId !== id));
@@ -633,13 +717,11 @@ export default function NugepSys() {
   // --- Demais Funções ---
   const handlePrintCard = () => { addLog("EXPORT_FICHA", `Imprimiu ficha: ${selectedArtifact.regNumber}`); window.print(); };
   
-  // CORREÇÃO: Função de análise robusta com JSON nativo e prompt estruturado
   const handleRunAnalysis = async (e) => {
     e.preventDefault(); 
     if (!analysisInput.trim()) return; 
     setIsAnalyzing(true);
     
-    // Mapeamos apenas os campos essenciais para economizar tokens
     const context = JSON.stringify(artifacts.map(a => ({ title: a.title, year: a.year, type: a.type, status: a.status, condition: a.condition })));
     
     const prompt = `
@@ -660,11 +742,8 @@ export default function NugepSys() {
     `;
 
     try { 
-      // Chamamos o Gemini com o modo JSON ativado (segundo parametro true)
       let resultText = await callGemini(prompt, true); 
-      
       if (resultText) {
-          // O parse agora é seguro pois a IA foi forçada a responder JSON
           setAnalysisResult(JSON.parse(resultText)); 
       }
     } catch (err) { 
@@ -721,13 +800,10 @@ export default function NugepSys() {
     setActiveTab('collection');
   };
 
-  // --- FUNÇÃO DE EXCLUSÃO (ATUALIZADA) ---
   const handleDelete = async (id, title) => { 
-      // Verifica se o usuário tem "Admin" no papel
       if (currentUser.role !== 'Administrador') { 
           return alert("Acesso Negado: Apenas Administradores podem excluir fichas.\n\nDica: Seu usuário deve conter 'admin' no nome para ter essa permissão."); 
       } 
-      
       if (window.confirm(`Tem certeza que deseja arquivar permanentemente a obra "${title}"?`)) { 
           try {
             await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'collection_items', id));
@@ -742,7 +818,11 @@ export default function NugepSys() {
   
   const handleGenerateDescription = async () => { if (!newArtifact.title) return alert("Preencha o título."); setIsGeneratingDesc(true); const desc = await callGemini(`Descrição técnica (PT-BR) para: "${newArtifact.title}" de "${newArtifact.artist}".`); if (desc) setNewArtifact(prev => ({ ...prev, description: desc })); setIsGeneratingDesc(false); };
   
-  const uniqueLocations = [...new Set(artifacts.map(a => a.location))];
+  // Combina locais dinâmicos com locais já existentes nas obras (para não quebrar legado)
+  const availableLocations = locations.map(l => l.name);
+  const legacyLocations = [...new Set(artifacts.map(a => a.location))];
+  const allFilterLocations = [...new Set([...availableLocations, ...legacyLocations])].sort();
+
   const uniqueTypes = [...new Set(artifacts.map(a => a.type))];
 
   const filteredArtifacts = artifacts.filter(art => {
@@ -751,7 +831,13 @@ export default function NugepSys() {
     const matchesType = filters.type ? art.type === filters.type : true;
     return matchesSearch && matchesLocation && matchesType;
   });
-  const locationData = {}; artifacts.forEach(a => { locationData[a.location] = (locationData[a.location] || 0) + 1; });
+  
+  // Contagem dinâmica por localização (Inventário)
+  const locationCounts = {};
+  locations.forEach(loc => { locationCounts[loc.name] = 0; });
+  artifacts.forEach(a => { 
+      locationCounts[a.location] = (locationCounts[a.location] || 0) + 1; 
+  });
 
   if (!currentUser) return (<><style>{printStyles}</style><LoginScreen onLogin={handleUserLogin} /></>);
   if (!firebaseUser) return (<div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin text-blue-600" size={40}/><span className="ml-2 text-slate-600">Conectando ao Banco de Dados...</span></div>);
@@ -775,6 +861,10 @@ export default function NugepSys() {
           <div className="pt-4 pb-1 px-4 text-[10px] uppercase font-bold text-slate-500 tracking-wider">Gestão do Acervo</div>
           <button onClick={() => setActiveTab('collection')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'collection' ? 'bg-green-700 text-white shadow-md' : 'hover:bg-green-900/50 hover:text-white'}`}>
             <BookOpen size={18} className={activeTab === 'collection' ? "text-white" : "text-green-500"}/> <span className="text-sm font-medium">Acervo</span>
+          </button>
+          {/* NOVA ABA DE ESPAÇOS */}
+          <button onClick={() => setActiveTab('spaces')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'spaces' ? 'bg-purple-700 text-white shadow-md' : 'hover:bg-purple-900/50 hover:text-white'}`}>
+            <Box size={18} className={activeTab === 'spaces' ? "text-white" : "text-purple-400"}/> <span className="text-sm font-medium">Espaços & Inventário</span>
           </button>
           <button onClick={() => setActiveTab('exhibitions')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'exhibitions' ? 'bg-blue-600 text-white shadow-md' : 'hover:bg-blue-900/50 hover:text-white'}`}>
             <GalleryVerticalEnd size={18} className={activeTab === 'exhibitions' ? "text-white" : "text-blue-400"}/> <span className="text-sm font-medium">Exposições</span>
@@ -811,6 +901,7 @@ export default function NugepSys() {
           <h1 className="text-2xl font-bold text-slate-800 tracking-tight flex items-center gap-2">
             {activeTab === 'dashboard' && <><LayoutDashboard className="text-blue-600"/> Painel de Gestão</>}
             {activeTab === 'collection' && <><BookOpen className="text-green-600"/> Acervo Museológico</>}
+            {activeTab === 'spaces' && <><Box className="text-purple-600"/> Espaços & Inventário</>}
             {activeTab === 'exhibitions' && <><GalleryVerticalEnd className="text-blue-600"/> Gestão de Exposições</>}
             {activeTab === 'add' && <><PlusCircle className="text-orange-600"/> {isEditing ? 'Editar Ficha' : 'Catalogação'}</>}
             {activeTab === 'audit' && <><History className="text-slate-600"/> Registro de Auditoria</>}
@@ -825,7 +916,7 @@ export default function NugepSys() {
 
         <div className="p-8 flex-1">
           
-          {/* DASHBOARD */}
+          {/* DASHBOARD - AGORA DINÂMICO */}
           {activeTab === 'dashboard' && (
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -847,29 +938,144 @@ export default function NugepSys() {
                 </div>
               </div>
               <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                <h3 className="text-sm font-bold text-slate-700 mb-6 flex items-center gap-2 uppercase tracking-wide"><Map size={18} className="text-blue-600"/> Mapa de Distribuição do Acervo</h3>
-                <div className="grid grid-cols-1 md:grid-cols-4 grid-rows-2 gap-4 h-64">
-                   <div className="md:col-span-2 md:row-span-2 bg-blue-50 border-2 border-blue-100 border-dashed rounded-xl p-4 flex items-center justify-center flex-col relative group hover:bg-blue-100 transition-colors">
-                     <span className="absolute top-2 left-3 text-[10px] font-bold text-blue-400 uppercase">Galeria Principal</span>
-                     <span className="text-4xl font-bold text-blue-800">{locationData["Galeria Principal"] || 0}</span>
-                     <span className="text-xs text-blue-400 mt-1">Obras</span>
-                   </div>
-                   <div className="bg-green-50 border-2 border-green-100 border-dashed rounded-xl p-4 flex items-center justify-center flex-col relative hover:bg-green-100">
-                     <span className="absolute top-2 left-3 text-[10px] font-bold text-green-500 uppercase">Reserva A</span>
-                     <span className="text-2xl font-bold text-green-700">{locationData["Reserva Técnica A"] || 0}</span>
-                   </div>
-                   <div className="bg-green-50 border-2 border-green-100 border-dashed rounded-xl p-4 flex items-center justify-center flex-col relative hover:bg-green-100">
-                      <span className="absolute top-2 left-3 text-[10px] font-bold text-green-500 uppercase">Reserva B</span>
-                      <span className="text-2xl font-bold text-green-700">{locationData["Reserva Técnica B"] || 0}</span>
-                   </div>
-                   <div className="md:col-span-2 bg-red-50 border-2 border-red-100 border-dashed rounded-xl p-4 flex items-center justify-center flex-col relative hover:bg-red-100">
-                      <span className="absolute top-2 left-3 text-[10px] font-bold text-red-500 uppercase">Laboratório de Restauro</span>
-                      <span className="text-2xl font-bold text-red-700">{locationData["Laboratório de Restauro"] || 0}</span>
-                      <span className="text-xs text-red-500 mt-1">Em tratamento</span>
+                <h3 className="text-sm font-bold text-slate-700 mb-6 flex items-center gap-2 uppercase tracking-wide"><Map size={18} className="text-blue-600"/> Mapa de Distribuição do Acervo (Por Setor)</h3>
+                
+                {/* GRID DINÂMICO BASEADO EM LOCAIS CADASTRADOS */}
+                <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                   {locations.length === 0 && (
+                       <div className="col-span-4 p-8 bg-slate-50 rounded border border-dashed text-center text-slate-400">
+                           Nenhum setor cadastrado. Vá em "Espaços & Inventário" para criar setores.
+                           <br/><small>As obras em locais antigos continuam listadas no filtro.</small>
+                       </div>
+                   )}
+                   {locations.map(loc => {
+                       // Define cores baseadas no tipo de local
+                       let borderColor = 'border-slate-200';
+                       let bgColor = 'bg-slate-50';
+                       let iconColor = 'text-slate-400';
+                       
+                       if (loc.type === 'Exposição') { borderColor = 'border-blue-200'; bgColor = 'bg-blue-50'; iconColor='text-blue-500'; }
+                       else if (loc.type === 'Reserva Técnica') { borderColor = 'border-green-200'; bgColor = 'bg-green-50'; iconColor='text-green-500'; }
+                       else if (loc.type === 'Laboratório') { borderColor = 'border-red-200'; bgColor = 'bg-red-50'; iconColor='text-red-500'; }
+                       else if (loc.type === 'Setor Sonoro' || loc.name.toLowerCase().includes('sonoro')) { borderColor = 'border-purple-200'; bgColor = 'bg-purple-50'; iconColor='text-purple-500'; }
+
+                       return (
+                        <div key={loc.id} className={`${bgColor} border-2 ${borderColor} border-dashed rounded-xl p-4 flex items-center justify-center flex-col relative group hover:bg-white transition-colors`}>
+                            <span className={`absolute top-2 left-3 text-[10px] font-bold ${iconColor} uppercase`}>{loc.name}</span>
+                            <span className={`text-2xl font-bold ${iconColor.replace('400', '700').replace('500', '700')} mt-4`}>
+                                {locationCounts[loc.name] || 0}
+                            </span>
+                            <span className="text-[10px] text-slate-400">obras</span>
+                            {/* Mostra responsável se houver */}
+                            {loc.responsible && <span className="absolute bottom-2 right-3 text-[9px] text-slate-400 flex items-center gap-1"><UserCheck size={8}/> {loc.responsible}</span>}
+                        </div>
+                       );
+                   })}
+                   
+                   {/* Card fixo para itens Externos/Outros */}
+                   <div className="bg-yellow-50 border-2 border-yellow-100 border-dashed rounded-xl p-4 flex items-center justify-center flex-col relative">
+                        <span className="absolute top-2 left-3 text-[10px] font-bold text-yellow-600 uppercase">Externo / Empréstimo</span>
+                        <span className="text-2xl font-bold text-yellow-700 mt-4">{artifacts.filter(a => a.location === 'Externo' || a.status === 'Empréstimo').length}</span>
                    </div>
                 </div>
               </div>
             </div>
+          )}
+
+          {/* NOVA ABA: GESTÃO DE ESPAÇOS E INVENTÁRIO */}
+          {activeTab === 'spaces' && (
+              <div className="space-y-6">
+                  <div className="bg-purple-50 border border-purple-200 p-6 rounded-xl flex items-start justify-between shadow-sm">
+                    <div className="flex items-start gap-4">
+                      <div className="bg-purple-100 p-3 rounded-full text-purple-600"><Box size={24}/></div>
+                      <div>
+                        <h2 className="text-lg font-bold text-purple-900">Gestão de Espaços & Setores</h2>
+                        <p className="text-sm text-purple-700 mb-2">Crie e edite setores e reservas para organizar seu inventário.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Formulário de Criação / Edição */}
+                  <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                      <div className="flex justify-between items-center mb-4">
+                        <h3 className="font-bold text-slate-800 text-sm uppercase">{editingLocationId ? 'Editar Espaço' : 'Criar Novo Espaço'}</h3>
+                        {editingLocationId && (
+                           <button onClick={handleCancelEditLocation} className="text-xs text-red-500 hover:underline">Cancelar Edição</button>
+                        )}
+                      </div>
+                      <form onSubmit={handleSaveLocation} className="flex gap-4 items-end flex-wrap">
+                          <div className="flex-1 min-w-[200px]">
+                              <label className="block text-xs font-bold text-slate-500 mb-1">Nome do Setor / Espaço</label>
+                              <input required value={newLocationName} onChange={e=>setNewLocationName(e.target.value)} placeholder="Ex: Setor Sonoro, Reserva C..." className="w-full border p-2 rounded-lg text-sm" />
+                          </div>
+                          <div className="w-48">
+                              <label className="block text-xs font-bold text-slate-500 mb-1">Tipo de Espaço</label>
+                              <select value={newLocationType} onChange={e=>setNewLocationType(e.target.value)} className="w-full border p-2 rounded-lg text-sm bg-white">
+                                  <option>Reserva Técnica</option>
+                                  <option>Exposição</option>
+                                  <option>Laboratório</option>
+                                  <option>Setor Administrativo</option>
+                                  <option>Setor Sonoro</option>
+                                  <option>Setor Iconográfico</option>
+                                  <option>Outros</option>
+                              </select>
+                          </div>
+                          {/* CAMPO NOVO: RESPONSÁVEL */}
+                          <div className="flex-1 min-w-[200px]">
+                              <label className="block text-xs font-bold text-slate-500 mb-1">Responsável pelo Setor</label>
+                              <input value={newLocationResponsible} onChange={e=>setNewLocationResponsible(e.target.value)} placeholder="Ex: João da Silva" className="w-full border p-2 rounded-lg text-sm" />
+                          </div>
+                          
+                          <button type="submit" className={`px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 text-white ${editingLocationId ? 'bg-blue-600 hover:bg-blue-700' : 'bg-purple-600 hover:bg-purple-700'}`}>
+                              {editingLocationId ? <Pencil size={16}/> : <Plus size={16}/>} 
+                              {editingLocationId ? 'Atualizar' : 'Criar'}
+                          </button>
+                      </form>
+                  </div>
+
+                  {/* Lista de Espaços e Contagem (Inventário) */}
+                  <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                      <div className="p-4 border-b bg-slate-50 flex justify-between items-center">
+                          <h3 className="font-bold text-slate-700 flex items-center gap-2"><List size={16}/> Inventário por Setor</h3>
+                          <span className="text-xs text-slate-500 bg-white px-2 py-1 rounded border">{locations.length} setores cadastrados</span>
+                      </div>
+                      <table className="w-full text-left text-sm">
+                          <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
+                              <tr>
+                                  <th className="p-4">Nome do Espaço</th>
+                                  <th className="p-4">Tipo</th>
+                                  <th className="p-4">Responsável</th>
+                                  <th className="p-4">Inventário</th>
+                                  <th className="p-4 text-right">Ações</th>
+                              </tr>
+                          </thead>
+                          <tbody className="divide-y">
+                              {locations.map(loc => (
+                                  <tr key={loc.id} className="hover:bg-purple-50 transition-colors">
+                                      <td className="p-4 font-bold text-slate-700">{loc.name}</td>
+                                      <td className="p-4"><span className="bg-slate-100 px-2 py-1 rounded text-xs text-slate-600">{loc.type}</span></td>
+                                      <td className="p-4 text-slate-600">{loc.responsible || '-'}</td>
+                                      <td className="p-4">
+                                          <div className="flex items-center gap-2">
+                                              <span className="font-bold text-lg text-purple-700">{locationCounts[loc.name] || 0}</span>
+                                              <span className="text-xs text-slate-400">itens</span>
+                                          </div>
+                                      </td>
+                                      <td className="p-4 text-right">
+                                          <div className="flex justify-end gap-2">
+                                            <button onClick={() => handleEditLocation(loc)} className="text-blue-500 hover:bg-blue-50 p-2 rounded" title="Editar Setor"><Pencil size={16}/></button>
+                                            <button onClick={() => handleDeleteLocation(loc.id, loc.name)} className="text-red-400 hover:text-red-600 p-2 hover:bg-red-50 rounded" title="Excluir Setor"><Trash2 size={16}/></button>
+                                          </div>
+                                      </td>
+                                  </tr>
+                              ))}
+                              {locations.length === 0 && (
+                                  <tr><td colSpan="5" className="p-8 text-center text-slate-400 italic">Nenhum setor criado. Use o formulário acima.</td></tr>
+                              )}
+                          </tbody>
+                      </table>
+                  </div>
+              </div>
           )}
 
           {/* ACERVO */}
@@ -880,9 +1086,10 @@ export default function NugepSys() {
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                   <input type="text" placeholder="Buscar por título, artista ou registro..." className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-green-500" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                 </div>
+                {/* FILTRO DINÂMICO DE LOCALIZAÇÃO */}
                 <select className="border border-slate-200 rounded-lg p-2 bg-slate-50 text-sm text-slate-600" value={filters.location} onChange={(e) => setFilters({...filters, location: e.target.value})}>
                   <option value="">Todas Localizações</option>
-                  {uniqueLocations.map(l => <option key={l} value={l}>{l}</option>)}
+                  {allFilterLocations.map(l => <option key={l} value={l}>{l}</option>)}
                 </select>
                 <select className="border border-slate-200 rounded-lg p-2 bg-slate-50 text-sm text-slate-600" value={filters.type} onChange={(e) => setFilters({...filters, type: e.target.value})}>
                   <option value="">Todos Tipos</option>
@@ -890,23 +1097,9 @@ export default function NugepSys() {
                 </select>
                 <div className="flex gap-2 justify-end col-span-2 md:col-span-1 md:col-start-6">
                   <button onClick={() => {setFilters({location:'', type:'', artist:'', status:''}); setSearchTerm('')}} className="text-slate-400 hover:text-red-500 p-2 rounded-full transition-colors" title="Limpar Filtros"><X size={16}/></button>
-                  
-                  {/* Botão de Exportar */}
-                  <button onClick={exportToCSV} className="text-green-600 hover:bg-green-50 p-2 rounded-lg transition-colors border border-green-200" title="Exportar CSV">
-                     <FileSpreadsheet size={18} />
-                  </button>
-
-                  {/* Botão de Importar */}
-                  <input 
-                    type="file" 
-                    accept=".csv" 
-                    className="hidden" 
-                    ref={fileInputRef}
-                    onChange={handleCSVImport}
-                  />
-                  <button onClick={() => fileInputRef.current.click()} className="text-blue-600 hover:bg-blue-50 p-2 rounded-lg transition-colors border border-blue-200" title="Importar CSV">
-                     <FileInput size={18} />
-                  </button>
+                  <button onClick={exportToCSV} className="text-green-600 hover:bg-green-50 p-2 rounded-lg transition-colors border border-green-200" title="Exportar CSV"><FileSpreadsheet size={18} /></button>
+                  <input type="file" accept=".csv" className="hidden" ref={fileInputRef} onChange={handleCSVImport} />
+                  <button onClick={() => fileInputRef.current.click()} className="text-blue-600 hover:bg-blue-50 p-2 rounded-lg transition-colors border border-blue-200" title="Importar CSV"><FileInput size={18} /></button>
                 </div>
               </div>
 
@@ -937,9 +1130,6 @@ export default function NugepSys() {
                             <div className="flex flex-col">
                               <span className="text-sm font-medium text-slate-700">{art.location}</span>
                               <span className="text-xs text-slate-400">{art.type}</span>
-                              {art.exhibitionHistory && art.exhibitionHistory.length > 1 && (
-                                <span className="text-[10px] text-blue-500 font-bold mt-1 flex items-center gap-1">+ {art.exhibitionHistory.length - 1} Exposição(ões) Antiga(s)</span>
-                              )}
                             </div>
                           </td>
                           <td className="px-6 py-4">
@@ -950,7 +1140,6 @@ export default function NugepSys() {
                           <td className="px-6 py-4 text-right">
                             <div className="flex justify-end gap-2">
                               <button onClick={(e) => { e.stopPropagation(); handleEditArtifact(art); }} className="text-blue-500 hover:bg-blue-50 p-2 rounded-lg transition-colors" title="Editar Ficha"><Pencil size={18}/></button>
-                              {/* Botão de Excluir adicionado na lista */}
                               <button onClick={(e) => { e.stopPropagation(); handleDelete(art.id, art.title); }} className="text-red-400 hover:bg-red-50 p-2 rounded-lg transition-colors" title="Excluir Ficha"><Trash2 size={18}/></button>
                               <button onClick={(e) => { e.stopPropagation(); setSelectedArtifact(art); setDetailTab('geral'); }} className="text-green-600 hover:bg-green-50 p-2 rounded-lg transition-colors"><Maximize2 size={18} /></button>
                             </div>
@@ -977,7 +1166,7 @@ export default function NugepSys() {
                         <p className="text-sm text-blue-700 mb-2">Gerencie exposições temporárias e permanentes e as obras associadas.</p>
                       </div>
                     </div>
-                    <button onClick={() => setIsExhibitionModalOpen(true)} className="bg-blue-600 text-white px-6 py-3 rounded-lg text-sm font-bold shadow-sm hover:bg-blue-700 flex items-center gap-2">
+                    <button onClick={() => {setIsExhibitionModalOpen(true); setEditingExhibitionId(null); setNewExhibition({ name: '', startDate: '', endDate: '', location: '', curator: '' });}} className="bg-blue-600 text-white px-6 py-3 rounded-lg text-sm font-bold shadow-sm hover:bg-blue-700 flex items-center gap-2">
                       <Plus size={18}/> Criar Nova Exposição
                     </button>
                   </div>
@@ -990,6 +1179,14 @@ export default function NugepSys() {
                             {ex.endDate >= new Date().toISOString().slice(0,10) ? 'Ativa/Futura' : 'Encerrada'}
                           </span>
                           <div className="flex gap-2">
+                             {/* BOTÃO EDITAR EXPOSIÇÃO */}
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); handleEditExhibition(ex); }} 
+                              className="text-slate-300 hover:text-blue-500 transition-colors" 
+                              title="Editar Exposição"
+                            >
+                              <Pencil size={18}/>
+                            </button>
                             <button 
                               onClick={(e) => handleDeleteExhibition(e, ex.id, ex.name)} 
                               className="text-slate-300 hover:text-red-500 transition-colors" 
@@ -1053,9 +1250,6 @@ export default function NugepSys() {
                             </button>
                           </div>
                         ))}
-                        {artifacts.filter(a => a.exhibitionHistory?.some(h => h.name === selectedExhibition.name)).length === 0 && (
-                          <div className="text-center p-8 text-slate-400 italic">Nenhuma obra vinculada a esta exposição.</div>
-                        )}
                       </div>
                     </div>
 
@@ -1096,12 +1290,12 @@ export default function NugepSys() {
                 </div>
               )}
 
-              {/* Modal de Criação de Exposição */}
+              {/* Modal de Criação / Edição de Exposição */}
               {isExhibitionModalOpen && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
                   <div className="bg-white rounded-xl p-6 w-full max-w-lg shadow-2xl">
-                    <h2 className="text-xl font-bold mb-4 text-slate-800">Nova Exposição</h2>
-                    <form onSubmit={handleCreateExhibition} className="space-y-4">
+                    <h2 className="text-xl font-bold mb-4 text-slate-800">{editingExhibitionId ? 'Editar Exposição' : 'Nova Exposição'}</h2>
+                    <form onSubmit={handleSaveExhibition} className="space-y-4">
                       <div><label className="text-sm font-bold text-slate-600">Nome da Exposição</label><input required className="w-full border p-2 rounded" value={newExhibition.name} onChange={e=>setNewExhibition({...newExhibition, name: e.target.value})} /></div>
                       <div className="grid grid-cols-2 gap-4">
                         <div><label className="text-sm font-bold text-slate-600">Data Início</label><input type="date" required className="w-full border p-2 rounded" value={newExhibition.startDate} onChange={e=>setNewExhibition({...newExhibition, startDate: e.target.value})} /></div>
@@ -1110,8 +1304,8 @@ export default function NugepSys() {
                       <div><label className="text-sm font-bold text-slate-600">Local</label><input required className="w-full border p-2 rounded" placeholder="Ex: Galeria Principal" value={newExhibition.location} onChange={e=>setNewExhibition({...newExhibition, location: e.target.value})} /></div>
                       <div><label className="text-sm font-bold text-slate-600">Curador Responsável</label><input required className="w-full border p-2 rounded" value={newExhibition.curator} onChange={e=>setNewExhibition({...newExhibition, curator: e.target.value})} /></div>
                       <div className="flex justify-end gap-2 pt-4">
-                        <button type="button" onClick={()=>setIsExhibitionModalOpen(false)} className="px-4 py-2 border rounded hover:bg-slate-50">Cancelar</button>
-                        <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-bold">Criar Exposição</button>
+                        <button type="button" onClick={()=>{setIsExhibitionModalOpen(false); setEditingExhibitionId(null);}} className="px-4 py-2 border rounded hover:bg-slate-50">Cancelar</button>
+                        <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-bold">{editingExhibitionId ? 'Salvar Alterações' : 'Criar Exposição'}</button>
                       </div>
                     </form>
                   </div>
@@ -1165,7 +1359,14 @@ export default function NugepSys() {
                     <div className="grid grid-cols-3 gap-4">
                       <div><label className="block text-sm font-bold text-slate-700 mb-1">Data</label><input type="date" className="w-full border p-2 rounded" value={newMovement.date} onChange={e => setNewMovement({...newMovement, date: e.target.value})}/></div>
                       <div><label className="block text-sm font-bold text-slate-700 mb-1">Origem (Atual)</label><input disabled className="w-full border p-2 rounded bg-slate-100" value={newMovement.artifactId ? artifacts.find(a=>a.id==newMovement.artifactId)?.location : ''} /></div>
-                      <div><label className="block text-sm font-bold text-slate-700 mb-1">Destino</label><input className="w-full border p-2 rounded" placeholder="Ex: Reserva B, MASP..." value={newMovement.to} onChange={e => setNewMovement({...newMovement, to: e.target.value})}/></div>
+                      <div>
+                          <label className="block text-sm font-bold text-slate-700 mb-1">Destino</label>
+                          {/* SELEÇÃO DINÂMICA DE DESTINO */}
+                          <input list="locations-list" className="w-full border p-2 rounded" placeholder="Selecione ou digite..." value={newMovement.to} onChange={e => setNewMovement({...newMovement, to: e.target.value})}/>
+                          <datalist id="locations-list">
+                              {locations.map(l => <option key={l.id} value={l.name}/>)}
+                          </datalist>
+                      </div>
                     </div>
                     <div><label className="block text-sm font-bold text-slate-700 mb-1">Responsável</label><input className="w-full border p-2 rounded" value={newMovement.responsible} onChange={e => setNewMovement({...newMovement, responsible: e.target.value})}/></div>
                     <div className="flex justify-end gap-2 pt-4">
@@ -1365,8 +1566,19 @@ export default function NugepSys() {
                     </div>
                      <div>
                       <label className="block text-sm font-medium text-slate-700 mb-2">Localização</label>
+                      {/* SELECT DINÂMICO PARA CATALOGAÇÃO */}
                       <select className="w-full px-4 py-2 border border-slate-200 rounded-lg bg-white outline-none" value={newArtifact.location} onChange={(e) => setNewArtifact({...newArtifact, location: e.target.value})}>
-                        <option>Galeria Principal</option><option>Reserva Técnica A</option><option>Reserva Técnica B</option><option>Arquivo Fotográfico</option><option>Laboratório de Restauro</option>
+                        {/* Lista os locais cadastrados */}
+                        {locations.map(loc => <option key={loc.id} value={loc.name}>{loc.name}</option>)}
+                        
+                        {/* Fallback se a lista estiver vazia ou para a primeira vez */}
+                        {locations.length === 0 && (
+                            <>
+                            <option>Reserva Técnica A</option>
+                            <option>Reserva Técnica B</option>
+                            <option>Galeria Principal</option>
+                            </>
+                        )}
                       </select>
                     </div>
                     <div>
