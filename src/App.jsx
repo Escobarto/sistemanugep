@@ -741,18 +741,29 @@ export default function NugepSys() {
     const context = JSON.stringify(artifacts.map(a => ({ title: a.title, year: a.year, type: a.type, status: a.status, condition: a.condition })));
     
     const prompt = `
-      Atue como um Especialista em Museologia e Ciência de Dados do NUGEP porém não citando isso.
-      Analise os dados do acervo fornecidos abaixo e responda à pergunta do usuário.
+      Atue como um assistente de gestão museológica profissional.
+      Adote um tom positivo, paciente, compreensivo e formal. Use linguagem clara e direta.
       
+      OBJETIVO: Analisar os dados do acervo e responder à pergunta do usuário com foco em dados quantitativos e análises qualitativas sobre:
+      - Quantidade total e por categorias.
+      - Estado de conservação (BOM, REGULAR, RUIM, etc.).
+      - Movimentações recentes e padrões de fluxo.
+      - Status de empréstimos (Entradas/Saídas).
+
       DADOS DO ACERVO: ${context}
       PERGUNTA DO USUÁRIO: "${analysisInput}"
       
+      IMPORTANTE:
+      - Seja direto ao ponto.
+      - Evite jargões excessivamente complexos, assumindo um entendimento básico mas profissional.
+      - Se a pergunta fugir do contexto de museologia/dados, redirecione educadamente.
+      
       Responda EXCLUSIVAMENTE em formato JSON seguindo este schema:
       {
-        "text": "Sua análise qualitativa e insights museológicos em texto corrido (PT-BR).",
-        "chartTitle": "Um título curto para o gráfico (opcional)",
+        "text": "Sua resposta completa aqui (texto corrido em PT-BR, formal e calmo).",
+        "chartTitle": "Título para gráfico (ex: Distribuição por Estado)",
         "chartData": [
-          {"label": "Categoria Exemplo", "value": 10, "color": "bg-blue-500"}
+          {"label": "Categoria", "value": 10, "color": "bg-blue-500"}
         ]
       }
     `;
