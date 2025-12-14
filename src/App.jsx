@@ -41,7 +41,10 @@ const db = getFirestore(app);
 const appId = 'nugep-oficial'; 
 
 // --- Configuração da API do Gemini (IA) ---
-const apiKey = ""; 
+// CORREÇÃO: Tenta ler do .env (Vercel) ou usa string vazia.
+// Você deve configurar 'VITE_GEMINI_API_KEY' nas variáveis de ambiente do Vercel.
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY || ""; 
+
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
 // --- CÓDIGO MESTRE DA INSTITUIÇÃO ---
@@ -319,7 +322,14 @@ export default function NugepSys() {
       if (currentUser) addLog("LOGIN", "Usuário acessou o sistema");
   }, [currentUser]);
   
+  // --- MODIFICADO: FUNÇÃO CALLGEMINI MAIS ROBUSTA ---
   const callGemini = async (prompt, jsonMode = false) => {
+    // 1. Verifica se a chave existe antes de tentar
+    if (!apiKey) {
+      alert("ERRO DE CONFIGURAÇÃO: Chave da API Gemini não encontrada.\n\nSe você está no Vercel, adicione a variável de ambiente 'VITE_GEMINI_API_KEY'.");
+      return null;
+    }
+
     try {
       const body = {
         contents: [{ parts: [{ text: prompt }] }],
@@ -332,18 +342,24 @@ export default function NugepSys() {
         body: JSON.stringify(body) 
       });
 
+      // 2. Verifica se a resposta HTTP foi OK (200-299)
       if (!response.ok) {
-        throw new Error(`Erro API (${response.status})`);
+         const errorData = await response.json();
+         // Tenta pegar mensagem de erro detalhada do Google ou usa status padrão
+         const errorMessage = errorData.error?.message || `Erro HTTP ${response.status}`;
+         throw new Error(errorMessage);
       }
 
       const data = await response.json(); 
       if (data.candidates && data.candidates.length > 0 && data.candidates[0].content) {
         return data.candidates[0].content.parts[0].text;
       } else {
-        return null;
+        throw new Error("A API não retornou nenhum candidato de texto.");
       }
     } catch (error) { 
-      console.error("Erro API:", error); 
+      // 3. Exibe erro visual para o usuário
+      console.error("Erro API Gemini:", error); 
+      alert(`Falha na Análise IA: ${error.message}`);
       return null; 
     }
   };
@@ -748,7 +764,8 @@ export default function NugepSys() {
       }
     } catch (err) { 
       console.error(err);
-      alert("Erro ao gerar análise. Tente novamente."); 
+      // O alert já é disparado no callGemini se for erro de API, aqui pegamos erros de JSON parse
+      if (!err.message.includes('API')) alert("Erro ao processar a resposta da IA.");
     } 
     setIsAnalyzing(false);
   };
