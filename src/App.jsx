@@ -38,7 +38,7 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 
 // Define um ID para o ambiente do app (usado para organizar as pastas no banco)
-const appId = 'sigma-oficial'; 
+const appId = 'nugep-oficial'; 
 
 // --- Configuração da API do Gemini (IA) ---
 // CORREÇÃO: Tenta ler do .env (Vercel) ou usa string vazia.
