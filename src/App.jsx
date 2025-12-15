@@ -81,12 +81,20 @@ const LoginScreen = ({ onLogin }) => {
     setIsLoading(true); 
     
     try {
-      // 1. Tenta login REAL no Firebase com Email e Senha
+      // 1. Tenta login REAL no Firebase (Valida no servidor do Google)
       const userCredential = await signInWithEmailAndPassword(auth, formData.email, formData.password);
       const user = userCredential.user;
 
-      // 2. Se deu certo, chama o onLogin do App
-      const role = formData.email.includes('admin') ? 'Administrador' : 'Usuário'; 
+      // --- AJUSTE AQUI: Lógica de Permissão do Frontend ---
+      
+      // Lista de emails que são Admins (Copie os mesmos do Firebase)
+      const adminEmails = ['guilhermemescobar@gmail.com', 'admin@nugep.com', 'diretoria@museu.com'];
+      
+      // Verifica: O email tem 'admin' no texto OU está na lista VIP?
+      const isAdmin = formData.email.includes('admin') || adminEmails.includes(formData.email);
+      
+      const role = isAdmin ? 'Administrador' : 'Usuário'; 
+      // ---------------------------------------------------
       
       onLogin({ 
         name: user.email, 
@@ -94,7 +102,6 @@ const LoginScreen = ({ onLogin }) => {
         uid: user.uid,
         loginTime: new Date() 
       });
-
     } catch (error) {
       console.error("Erro de Auth:", error);
       setError('Email ou senha inválidos. Verifique suas credenciais.');
