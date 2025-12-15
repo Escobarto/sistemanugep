@@ -264,16 +264,16 @@ export default function NugepSys() {
 
   // --- FIREBASE: Inicialização e Listeners ---
   
-  // 1. Monitoramento de Autenticação
-useEffect(() => {
-  // Apenas escuta se houve login ou logout (não tenta logar forçado)
-  const unsubscribe = onAuthStateChanged(auth, (user) => {
-    setFirebaseUser(user);
-  });
-  
-  // Limpa o listener ao desmontar
-  return () => unsubscribe();
-}, []);
+  // 1. Monitoramento de Autenticação (CORRIGIDO)
+  useEffect(() => {
+    // Apenas escuta se houve login ou logout (não tenta logar forçado)
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setFirebaseUser(user);
+    });
+    
+    // Limpa o listener ao desmontar
+    return () => unsubscribe();
+  }, []); // <--- Verifique se esta linha está exatamente assim
     initAuth();
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setFirebaseUser(user);
