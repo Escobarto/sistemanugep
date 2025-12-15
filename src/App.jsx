@@ -18,7 +18,7 @@ import {
   onSnapshot, query, orderBy, serverTimestamp 
 } from 'firebase/firestore';
 import { 
-  getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged 
+  getAuth, signInAnonymously, signInWithEmailAndPassword, signInWithCustomToken, onAuthStateChanged 
 } from 'firebase/auth';
 
 // --- CONFIGURAÇÃO E INICIALIZAÇÃO DO FIREBASE (SEU PROJETO) ---
@@ -66,6 +66,7 @@ const printStyles = `
 // --- Componente de Login ---
 const LoginScreen = ({ onLogin }) => {
   const [authMode, setAuthMode] = useState('login'); 
+  // AJUSTE: O formData agora foca em 'email' para o login
   const [formData, setFormData] = useState({ 
     username: '', password: '', email: '', regName: '', regPassword: '', accessCode: '' 
   });
@@ -74,13 +75,32 @@ const LoginScreen = ({ onLogin }) => {
 
   const handleChange = (e) => { setFormData({ ...formData, [e.target.name]: e.target.value }); setError(''); };
 
-  const handleLogin = (e) => {
+  // --- LÓGICA DE LOGIN REAL AJUSTADA ---
+  const handleLogin = async (e) => { 
     e.preventDefault();
-    if (formData.username && formData.password) {
-      // REGRA DE PERMISSÃO: Se o nome tiver 'admin', vira Administrador
-      const role = formData.username.toLowerCase().includes('admin') ? 'Administrador' : 'Usuário';
-      onLogin({ name: formData.username, role: role, loginTime: new Date() });
-    } else { setError('Preencha todos os campos.'); }
+    setIsLoading(true); 
+    
+    try {
+      // 1. Tenta login REAL no Firebase com Email e Senha
+      const userCredential = await signInWithEmailAndPassword(auth, formData.email, formData.password);
+      const user = userCredential.user;
+
+      // 2. Se deu certo, chama o onLogin do App
+      const role = formData.email.includes('admin') ? 'Administrador' : 'Usuário'; 
+      
+      onLogin({ 
+        name: user.email, 
+        role: role, 
+        uid: user.uid,
+        loginTime: new Date() 
+      });
+
+    } catch (error) {
+      console.error("Erro de Auth:", error);
+      setError('Email ou senha inválidos. Verifique suas credenciais.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleRegister = async (e) => {
@@ -125,8 +145,31 @@ const LoginScreen = ({ onLogin }) => {
           {authMode === 'login' && (
             <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
               <form onSubmit={handleLogin} className="space-y-4">
-                <div className="relative"><User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} /><input name="username" type="text" className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none text-sm" placeholder="Usuário (Use 'admin' para permissão total)" value={formData.username} onChange={handleChange} /></div>
-                <div className="relative"><Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} /><input name="password" type="password" className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none text-sm" placeholder="Senha" value={formData.password} onChange={handleChange} /></div>
+                {/* AJUSTE: Input de Email configurado corretamente */}
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                  <input 
+                    name="email" 
+                    type="email" 
+                    className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none text-sm" 
+                    placeholder="Email de Acesso (ex: admin@nugep.com)" 
+                    value={formData.email} 
+                    onChange={handleChange} 
+                  />
+                </div>
+                
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                  <input 
+                    name="password" 
+                    type="password" 
+                    className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none text-sm" 
+                    placeholder="Senha" 
+                    value={formData.password} 
+                    onChange={handleChange} 
+                  />
+                </div>
+                
                 {error && <p className="text-red-500 text-xs font-bold">{error}</p>}
                 <button type="submit" className="w-full py-3 bg-blue-700 hover:bg-blue-800 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-colors text-sm uppercase tracking-wide"><LogIn size={18} /> Acessar Sistema</button>
               </form>
