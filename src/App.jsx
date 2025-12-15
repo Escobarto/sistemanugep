@@ -264,17 +264,16 @@ export default function NugepSys() {
 
   // --- FIREBASE: Inicialização e Listeners ---
   
-  // 1. Autenticação no Firebase (Necessário para acessar Firestore)
   // 1. Monitoramento de Autenticação
-    useEffect(() => {
-      // Apenas escuta se houve login ou logout (não tenta logar forçado)
-      const unsubscribe = onAuthStateChanged(auth, (user) => {
-        setFirebaseUser(user);
-      });
-      
-      // Limpa o listener ao desmontar
-      return () => unsubscribe();
-    }, []);
+useEffect(() => {
+  // Apenas escuta se houve login ou logout (não tenta logar forçado)
+  const unsubscribe = onAuthStateChanged(auth, (user) => {
+    setFirebaseUser(user);
+  });
+  
+  // Limpa o listener ao desmontar
+  return () => unsubscribe();
+}, []);
     initAuth();
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setFirebaseUser(user);
