@@ -18,7 +18,7 @@ import {
   onSnapshot, query, orderBy, serverTimestamp 
 } from 'firebase/firestore';
 import { 
-  getAuth, signInAnonymously, signInWithEmailAndPassword, signInWithCustomToken, onAuthStateChanged 
+  getAuth, signInAnonymously, signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithCustomToken, onAuthStateChanged 
 } from 'firebase/auth';
 
 // --- CONFIGURAÇÃO E INICIALIZAÇÃO DO FIREBASE (SEU PROJETO) ---
@@ -105,6 +105,8 @@ const LoginScreen = ({ onLogin }) => {
 
   const handleRegister = async (e) => {
     e.preventDefault();
+    
+    // Validações Básicas
     if (!formData.regName || !formData.email || !formData.regPassword || !formData.accessCode) { 
       setError('Todos os campos são obrigatórios.'); 
       return; 
@@ -114,19 +116,47 @@ const LoginScreen = ({ onLogin }) => {
       setError('Por favor, insira um e-mail válido.');
       return;
     }
-    setIsLoading(true);
-    setTimeout(() => {
-      if (formData.accessCode === INSTITUTION_ACCESS_CODE) {
-        setIsLoading(false);
-        onLogin({ name: formData.regName, role: 'Usuário', loginTime: new Date(), email: formData.email });
-        alert(`Bem-vindo(a) à equipe, ${formData.regName}!`);
-      } else {
-        setIsLoading(false);
-        setError('Código de Acesso Institucional incorreto. Solicite à chefia.');
-      }
-    }, 1000);
-  };
 
+    // Validação do Código da Instituição (Segurança extra)
+    if (formData.accessCode !== INSTITUTION_ACCESS_CODE) {
+        setError('Código de Acesso Institucional incorreto. Solicite à chefia.');
+        return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      // --- CRIAÇÃO REAL NO FIREBASE ---
+      const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.regPassword);
+      const user = userCredential.user;
+
+      // Opcional: Aqui você poderia salvar o nome (regName) no perfil do usuário ou no banco de dados
+      
+      // Loga o usuário automaticamente no App após criar
+      onLogin({ 
+          name: formData.regName, // Usamos o nome digitado para exibição imediata
+          role: 'Usuário', 
+          uid: user.uid,
+          loginTime: new Date(), 
+          email: user.email 
+      });
+      
+      alert(`Conta criada com sucesso! Bem-vindo(a), ${formData.regName}!`);
+
+    } catch (error) {
+      console.error("Erro ao registrar:", error);
+      if (error.code === 'auth/email-already-in-use') {
+          setError('Este e-mail já está cadastrado.');
+      } else if (error.code === 'auth/weak-password') {
+          setError('A senha deve ter pelo menos 6 caracteres.');
+      } else {
+          setError('Erro ao criar conta: ' + error.message);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
   return (
     <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 font-sans">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden relative">
