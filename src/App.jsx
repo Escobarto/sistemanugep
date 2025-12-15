@@ -48,7 +48,7 @@ const apiKey = import.meta.env.VITE_GEMINI_API_KEY || "";
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
 // --- CÓDIGO MESTRE DA INSTITUIÇÃO ---
-const INSTITUTION_ACCESS_CODE = "SIGMA2025"; 
+const INSTITUTION_ACCESS_CODE = "NUGEP2025"; 
 
 // --- Estilos de Impressão (PDF) ---
 const printStyles = `
@@ -173,7 +173,7 @@ const LoginScreen = ({ onLogin }) => {
             <div className="mx-auto bg-white/10 w-20 h-20 rounded-full flex items-center justify-center mb-4 backdrop-blur-sm relative z-10 border-2 border-white/20">
               <Landmark size={40} className="text-white" />
             </div>
-            <h1 className="text-3xl font-bold text-white relative z-10 tracking-tight">SIGMA</h1>
+            <h1 className="text-3xl font-bold text-white relative z-10 tracking-tight">NUGEP</h1>
             <p className="text-slate-300 text-xs uppercase tracking-widest mt-2 relative z-10 font-medium">Gestão do Patrimônio & Museus</p>
           </div>
         </div>
