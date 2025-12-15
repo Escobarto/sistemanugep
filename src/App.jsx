@@ -274,12 +274,6 @@ export default function NugepSys() {
     // Limpa o listener ao desmontar
     return () => unsubscribe();
   }, []); // <--- Verifique se esta linha está exatamente assim
-    initAuth();
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setFirebaseUser(user);
-    });
-    return () => unsubscribe();
-  }, []);
 
   // 2. Escutar Coleções do Firestore (Só roda após auth)
   useEffect(() => {
