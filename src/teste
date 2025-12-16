@@ -1,4 +1,93 @@
 /// 
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // =========================================================
+    // FUNÇÕES DE SEGURANÇA
+    // =========================================================
+
+    function estaAutenticado() {
+      return request.auth != null;
+    }
+
+    function ehAdmin() {
+      return request.auth.token.email in [
+        'admin@nugep.com',
+        'guilhermemescobar@gmail.com',
+        'diretoria@museu.com'
+      ];
+    }
+
+    function stringObrigatoria(campo) {
+      return campo in request.resource.data 
+              && request.resource.data[campo] is string 
+              && request.resource.data[campo].size() > 0;
+    }
+
+    function validarStatus() {
+      return request.resource.data.status in 
+              ['Armazenado', 'Exposto', 'Empréstimo', 'Em Restauração', 'Bom', 'Regular', 'Ruim', 'Péssimo'];
+    }
+
+    function validarCamposObrigatorios() {
+      return stringObrigatoria('title') 
+          && stringObrigatoria('regNumber')
+          && stringObrigatoria('type');
+    }
+
+    // =========================================================
+    // REGRAS POR COLEÇÃO
+    // =========================================================
+
+    // 1. CONFIGURAÇÕES DE PRIVACIDADE (NOVO - CRUCIAL PARA O ERRO)
+   	match /artifacts/nugep-oficial/public/data/settings_visibility {
+      allow read: if true; // O site público lê
+      allow write: if estaAutenticado(); // O admin (você) escreve
+    }
+
+    // 2. ACERVO DE OBRAS
+    match /artifacts/nugep-oficial/public/data/collection_items/{documento} {
+      allow read: if true; 
+      allow create, update: if estaAutenticado() 
+                            && validarCamposObrigatorios()
+                            && validarStatus();
+      allow delete: if estaAutenticado() && ehAdmin();
+    }
+
+    // 3. EXPOSIÇÕES
+    match /artifacts/nugep-oficial/public/data/exhibitions/{documento} {
+      allow read: if true;
+      allow create, update: if estaAutenticado();
+      allow delete: if estaAutenticado() && ehAdmin(); 
+    }
+    
+    // 4. LOGS DO SISTEMA (Auditoria)
+    match /artifacts/nugep-oficial/public/data/system_logs/{documento} {
+       allow read: if estaAutenticado();
+       allow create: if estaAutenticado();
+    }
+    
+    // 5. LOCAIS E SETORES
+    match /artifacts/nugep-oficial/public/data/locations/{documento} {
+      allow read: if true;
+      allow create, update: if estaAutenticado();
+      allow delete: if estaAutenticado() && ehAdmin(); 
+    }
+  }
+}
+
+
+REGRAS
+
+
+
+
+
+
+
+
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   LayoutDashboard, BookOpen, PlusCircle, Search, Settings, Landmark, 
