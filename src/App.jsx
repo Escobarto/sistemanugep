@@ -8,7 +8,8 @@ import {
   FileSpreadsheet, QrCode, Truck, Stethoscope, Eye, Camera, 
   Copyright, Archive, AlertTriangle, ArrowRight, ClipboardList, 
   GalleryVerticalEnd, Calendar, MapPin, MoveRight, MoveLeft, 
-  KeyRound, Pencil, FileInput, List, Box, Grid, UserCheck
+  KeyRound, Pencil, FileInput, List, Box, Grid, UserCheck,
+  Bell, BellRing, Clock
 } from 'lucide-react';
 
 // --- IMPORTAÇÕES DO FIREBASE ---
@@ -41,7 +42,7 @@ const db = getFirestore(app);
 const appId = 'nugep-oficial'; 
 
 // --- Configuração da API do Gemini (IA) ---
-const apiKey = import.meta.env.VITE_GEMINI_API_KEY || ""; 
+const apiKey = ""; 
 
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
@@ -259,9 +260,19 @@ export default function NugepSys() {
   // Estados de Edição de Ficha
   const [isEditing, setIsEditing] = useState(false);
 
-  // Estados Movimentação
+  // Estados Movimentação (ATUALIZADO COM NOVOS CAMPOS)
   const [isMovementModalOpen, setIsMovementModalOpen] = useState(false);
-  const [newMovement, setNewMovement] = useState({ artifactId: '', type: 'Trânsito Interno', from: '', to: '', responsible: '', date: new Date().toISOString().slice(0,10) });
+  const [newMovement, setNewMovement] = useState({ 
+      artifactId: '', 
+      type: 'Trânsito Interno', 
+      from: '', 
+      to: '', 
+      responsible: '', 
+      date: new Date().toISOString().slice(0,10),
+      returnDate: '', // NOVO: Prazo de devolução
+      observations: '', // NOVO: Observações
+      alertDate: '' // NOVO: Data para o alarme
+  });
 
   // Estados Conservação
   const [selectedForConservation, setSelectedForConservation] = useState([]);
@@ -310,7 +321,9 @@ export default function NugepSys() {
     // --- NOVO: Carregar Configurações de Privacidade ---
     const loadSettings = async () => {
         try {
-            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings_visibility');
+            // CORREÇÃO: Caminho do documento agora tem 6 segmentos (par)
+            // Coll: artifacts -> Doc: appId -> Coll: public -> Doc: data -> Coll: settings -> Doc: public_visibility
+            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'public_visibility');
             const docSnap = await getDoc(docRef);
             if (docSnap.exists()) {
                 setPublicSettings(docSnap.data());
@@ -395,7 +408,8 @@ export default function NugepSys() {
   // --- NOVO: Função para Salvar Configurações Públicas ---
   const handleSaveSettings = async () => {
     try {
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings_visibility'), publicSettings);
+        // CORREÇÃO: Caminho corrigido para 6 segmentos
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'public_visibility'), publicSettings);
         addLog("CONFIG", "Atualizou as configurações de privacidade da Galeria Pública");
         alert("Configurações da Galeria Pública atualizadas!");
     } catch (e) {
@@ -666,7 +680,7 @@ export default function NugepSys() {
     addLog("EXPOSICAO", `Removeu obra ${art.regNumber} da exposição ${exhibitionName || 'Atual'}`);
   };
 
-  // --- LÓGICA DE MOVIMENTAÇÃO ---
+  // --- LÓGICA DE MOVIMENTAÇÃO (ATUALIZADA) ---
   const handleRegisterMovement = async (e) => {
     e.preventDefault();
     if (!newMovement.artifactId) return alert("Selecione uma obra.");
@@ -717,7 +731,12 @@ export default function NugepSys() {
 
     addLog("MOVIMENTACAO", `${newMovement.type} da obra ID ${art.regNumber}`);
     setIsMovementModalOpen(false);
-    setNewMovement({ artifactId: '', type: 'Trânsito Interno', from: '', to: '', responsible: '', date: new Date().toISOString().slice(0,10) });
+    // Reinicia o formulário com os novos campos vazios
+    setNewMovement({ 
+        artifactId: '', type: 'Trânsito Interno', from: '', to: '', responsible: '', 
+        date: new Date().toISOString().slice(0,10),
+        returnDate: '', observations: '', alertDate: ''
+    });
     alert("Movimentação registrada com sucesso.");
   };
 
@@ -979,6 +998,7 @@ export default function NugepSys() {
           <button onClick={() => setActiveTab('collection')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'collection' ? 'bg-green-700 text-white shadow-md' : 'hover:bg-green-900/50 hover:text-white'}`}>
             <BookOpen size={18} className={activeTab === 'collection' ? "text-white" : "text-green-500"}/> <span className="text-sm font-medium">Acervo</span>
           </button>
+          {/* NOVA ABA DE ESPAÇOS */}
           <button onClick={() => setActiveTab('spaces')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'spaces' ? 'bg-purple-700 text-white shadow-md' : 'hover:bg-purple-900/50 hover:text-white'}`}>
             <Box size={18} className={activeTab === 'spaces' ? "text-white" : "text-purple-400"}/> <span className="text-sm font-medium">Espaços & Inventário</span>
           </button>
@@ -1002,10 +1022,6 @@ export default function NugepSys() {
           <button onClick={() => setActiveTab('audit')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'audit' ? 'bg-slate-700 text-white shadow-md' : 'hover:bg-slate-800 hover:text-white'}`}>
             <History size={18} className={activeTab === 'audit' ? "text-white" : "text-slate-400"}/> <span className="text-sm font-medium">Auditoria</span>
           </button>
-          {/* NOVA ABA: CONFIGURAÇÕES DE PRIVACIDADE */}
-          <button onClick={() => setActiveTab('settings')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'settings' ? 'bg-slate-700 text-white shadow-md' : 'hover:bg-slate-800 hover:text-white'}`}>
-            <ShieldCheck size={18} className={activeTab === 'settings' ? "text-white" : "text-slate-400"}/> <span className="text-sm font-medium">Privacidade & Web</span>
-          </button>
         </nav>
         <div className="p-4 border-t border-slate-800 bg-slate-950/30">
           <div className="flex items-center gap-3 mb-3 px-1">
@@ -1028,7 +1044,6 @@ export default function NugepSys() {
             {activeTab === 'movements' && <><Truck className="text-yellow-600"/> Gestão de Movimentações</>}
             {activeTab === 'conservation' && <><Stethoscope className="text-red-600"/> Laboratório de Conservação</>}
             {activeTab === 'analysis' && <><Sparkles className="text-indigo-500"/> Inteligência de Dados</>}
-            {activeTab === 'settings' && <><ShieldCheck className="text-slate-600"/> Privacidade da Galeria</>}
           </h1>
           <div className="flex items-center gap-2 text-xs font-medium text-slate-500 bg-slate-100 px-3 py-1.5 rounded-full">
             <ShieldCheck size={14} className="text-green-600" /> Ambiente Seguro - Cloud
@@ -1435,21 +1450,85 @@ export default function NugepSys() {
             </div>
           )}
 
-          {/* MOVIMENTAÇÕES - Funcional */}
+          {/* MOVIMENTAÇÕES - ATUALIZADO COM ALERTAS */}
           {activeTab === 'movements' && (
             <div className="space-y-6">
               {!isMovementModalOpen ? (
-                <div className="bg-yellow-50 border border-yellow-200 p-6 rounded-xl flex items-start justify-between shadow-sm">
-                  <div className="flex items-start gap-4">
-                    <div className="bg-yellow-100 p-3 rounded-full text-yellow-600"><Truck size={24}/></div>
-                    <div>
-                      <h2 className="text-lg font-bold text-yellow-900">Gestão de Movimentações</h2>
-                      <p className="text-sm text-yellow-700 mb-2">Registre empréstimos, entradas e trânsito interno.</p>
+                <div className="space-y-6">
+                    <div className="bg-yellow-50 border border-yellow-200 p-6 rounded-xl flex items-start justify-between shadow-sm">
+                        <div className="flex items-start gap-4">
+                            <div className="bg-yellow-100 p-3 rounded-full text-yellow-600"><Truck size={24}/></div>
+                            <div>
+                                <h2 className="text-lg font-bold text-yellow-900">Gestão de Movimentações</h2>
+                                <p className="text-sm text-yellow-700 mb-2">Registre empréstimos, entradas e trânsito interno.</p>
+                            </div>
+                        </div>
+                        <button onClick={() => setIsMovementModalOpen(true)} className="bg-yellow-600 text-white px-6 py-3 rounded-lg text-sm font-bold shadow-sm hover:bg-yellow-700 flex items-center gap-2">
+                            <Plus size={18}/> Nova Movimentação
+                        </button>
                     </div>
-                  </div>
-                  <button onClick={() => setIsMovementModalOpen(true)} className="bg-yellow-600 text-white px-6 py-3 rounded-lg text-sm font-bold shadow-sm hover:bg-yellow-700 flex items-center gap-2">
-                    <Plus size={18}/> Nova Movimentação
-                  </button>
+
+                    {/* --- NOVO: SEÇÃO DE ALERTAS DE PRAZO --- */}
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div className="p-4 border-b bg-red-50/50 flex justify-between items-center">
+                            <h3 className="font-bold text-red-800 flex items-center gap-2"><BellRing size={18}/> Alertas de Devolução / Prazos</h3>
+                        </div>
+                        <div className="p-4">
+                            {/* Filtra obras com movimentos pendentes (Emprestimos ou Saidas com data de retorno) */}
+                            {(() => {
+                                const pendingReturns = artifacts.flatMap(art => {
+                                    const lastMove = art.movements && art.movements[0];
+                                    if (!lastMove) return [];
+                                    
+                                    // Se for saída e tiver prazo de devolução
+                                    if ((lastMove.type.includes('Saída') || lastMove.type.includes('Empréstimo (Saída)')) && lastMove.returnDate) {
+                                        return [{ ...lastMove, artifactTitle: art.title, artifactId: art.id, regNumber: art.regNumber }];
+                                    }
+                                    return [];
+                                }).sort((a,b) => new Date(a.returnDate) - new Date(b.returnDate));
+
+                                if (pendingReturns.length === 0) return <p className="text-slate-400 text-sm italic text-center p-2">Nenhum prazo pendente.</p>;
+
+                                return (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                        {pendingReturns.map((item, idx) => {
+                                            const today = new Date();
+                                            const returnDate = new Date(item.returnDate);
+                                            const alertDate = item.alertDate ? new Date(item.alertDate) : null;
+                                            
+                                            // Lógica do Alerta
+                                            let statusColor = "bg-green-50 border-green-200";
+                                            let icon = <Clock size={16} className="text-green-600"/>;
+                                            let message = "Prazo normal";
+
+                                            if (today > returnDate) {
+                                                statusColor = "bg-red-50 border-red-200 animate-pulse";
+                                                icon = <AlertTriangle size={16} className="text-red-600"/>;
+                                                message = "VENCIDO";
+                                            } else if (alertDate && today >= alertDate) {
+                                                statusColor = "bg-yellow-50 border-yellow-200";
+                                                icon = <BellRing size={16} className="text-yellow-600"/>;
+                                                message = "Alerta de Prazo";
+                                            }
+
+                                            return (
+                                                <div key={idx} className={`border p-3 rounded-lg flex flex-col gap-2 ${statusColor}`}>
+                                                    <div className="flex justify-between items-start">
+                                                        <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{item.type}</span>
+                                                        <span className="text-xs font-bold flex items-center gap-1">{icon} {message}</span>
+                                                    </div>
+                                                    <p className="font-bold text-slate-800 text-sm truncate" title={item.artifactTitle}>{item.artifactTitle}</p>
+                                                    <p className="text-xs text-slate-600">Devolução: <b>{item.returnDate.split('-').reverse().join('/')}</b></p>
+                                                    <p className="text-xs text-slate-500">Destino: {item.to}</p>
+                                                    {item.observations && <p className="text-[10px] bg-white/50 p-1 rounded italic text-slate-500 mt-1">Obs: {item.observations}</p>}
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                )
+                            })()}
+                        </div>
+                    </div>
                 </div>
               ) : (
                 <div className="bg-white border border-slate-200 p-6 rounded-xl shadow-lg animate-in fade-in">
@@ -1477,19 +1556,39 @@ export default function NugepSys() {
                         </select>
                       </div>
                     </div>
-                    <div className="grid grid-cols-3 gap-4">
-                      <div><label className="block text-sm font-bold text-slate-700 mb-1">Data</label><input type="date" className="w-full border p-2 rounded" value={newMovement.date} onChange={e => setNewMovement({...newMovement, date: e.target.value})}/></div>
-                      <div><label className="block text-sm font-bold text-slate-700 mb-1">Origem (Atual)</label><input disabled className="w-full border p-2 rounded bg-slate-100" value={newMovement.artifactId ? artifacts.find(a=>a.id==newMovement.artifactId)?.location : ''} /></div>
-                      <div>
-                          <label className="block text-sm font-bold text-slate-700 mb-1">Destino</label>
-                          {/* SELEÇÃO DINÂMICA DE DESTINO */}
-                          <input list="locations-list" className="w-full border p-2 rounded" placeholder="Selecione ou digite..." value={newMovement.to} onChange={e => setNewMovement({...newMovement, to: e.target.value})}/>
+                    
+                    {/* Linha de Datas e Destino */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div><label className="block text-sm font-bold text-slate-700 mb-1">Data da Movimentação</label><input type="date" className="w-full border p-2 rounded" value={newMovement.date} onChange={e => setNewMovement({...newMovement, date: e.target.value})}/></div>
+                      
+                      {/* Destino inteligente: Se for trânsito interno, sugere locais. Se externo, permite texto livre */}
+                      <div className="md:col-span-2">
+                          <label className="block text-sm font-bold text-slate-700 mb-1">Destino / Instituição</label>
+                          <input list="locations-list" className="w-full border p-2 rounded" placeholder={newMovement.type.includes('Saída') ? "Ex: Fundação Roberto Marinho..." : "Selecione ou digite..."} value={newMovement.to} onChange={e => setNewMovement({...newMovement, to: e.target.value})}/>
                           <datalist id="locations-list">
                               {locations.map(l => <option key={l.id} value={l.name}/>)}
                           </datalist>
                       </div>
                     </div>
-                    <div><label className="block text-sm font-bold text-slate-700 mb-1">Responsável</label><input className="w-full border p-2 rounded" value={newMovement.responsible} onChange={e => setNewMovement({...newMovement, responsible: e.target.value})}/></div>
+
+                    {/* --- NOVOS CAMPOS: PRAZOS E ALERTAS --- */}
+                    <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 grid grid-cols-1 md:grid-cols-2 gap-4">
+                         <div>
+                            <label className="block text-sm font-bold text-slate-700 mb-1 flex items-center gap-1"><Calendar size={14}/> Prazo de Devolução (Opcional)</label>
+                            <input type="date" className="w-full border p-2 rounded bg-white" value={newMovement.returnDate} onChange={e => setNewMovement({...newMovement, returnDate: e.target.value})}/>
+                         </div>
+                         <div>
+                            <label className="block text-sm font-bold text-slate-700 mb-1 flex items-center gap-1"><Bell size={14}/> Data do Alerta/Lembrete</label>
+                            <input type="date" className="w-full border p-2 rounded bg-white" title="Quando o sistema deve avisar sobre este prazo?" value={newMovement.alertDate} onChange={e => setNewMovement({...newMovement, alertDate: e.target.value})}/>
+                         </div>
+                         <div className="md:col-span-2">
+                            <label className="block text-sm font-bold text-slate-700 mb-1">Observações</label>
+                            <textarea rows="2" className="w-full border p-2 rounded bg-white text-sm" placeholder="Detalhes do transporte, responsável externo, condições..." value={newMovement.observations} onChange={e => setNewMovement({...newMovement, observations: e.target.value})}/>
+                         </div>
+                    </div>
+
+                    <div><label className="block text-sm font-bold text-slate-700 mb-1">Responsável Interno</label><input className="w-full border p-2 rounded" value={newMovement.responsible} onChange={e => setNewMovement({...newMovement, responsible: e.target.value})}/></div>
+                    
                     <div className="flex justify-end gap-2 pt-4">
                       <button type="button" onClick={() => setIsMovementModalOpen(false)} className="px-4 py-2 border rounded">Cancelar</button>
                       <button type="submit" className="px-6 py-2 bg-yellow-600 text-white rounded font-bold hover:bg-yellow-700">Confirmar Movimentação</button>
@@ -1502,15 +1601,16 @@ export default function NugepSys() {
                 <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><History size={18}/> Histórico Recente</h3>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm text-left">
-                    <thead className="bg-slate-50 text-slate-500 uppercase text-xs"><tr><th className="p-3">Data</th><th className="p-3">Obra</th><th className="p-3">Tipo</th><th className="p-3">Destino</th><th className="p-3">Responsável</th></tr></thead>
+                    <thead className="bg-slate-50 text-slate-500 uppercase text-xs"><tr><th className="p-3">Data</th><th className="p-3">Obra</th><th className="p-3">Tipo</th><th className="p-3">Destino</th><th className="p-3">Devolução</th><th className="p-3">Obs</th></tr></thead>
                     <tbody>
-                      {artifacts.flatMap(a => (a.movements || []).map(m => ({...m, artwork: a.title}))).sort((a,b) => new Date(b.date) - new Date(a.date)).slice(0, 5).map((m, i) => (
+                      {artifacts.flatMap(a => (a.movements || []).map(m => ({...m, artwork: a.title}))).sort((a,b) => new Date(b.date) - new Date(a.date)).slice(0, 10).map((m, i) => (
                         <tr key={i} className="border-b hover:bg-slate-50">
-                          <td className="p-3 font-mono text-xs">{m.date}</td>
-                          <td className="p-3 font-bold text-slate-700">{m.artwork}</td>
+                          <td className="p-3 font-mono text-xs">{m.date.split('-').reverse().join('/')}</td>
+                          <td className="p-3 font-bold text-slate-700 truncate max-w-[150px]" title={m.artwork}>{m.artwork}</td>
                           <td className="p-3"><span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-xs">{m.type}</span></td>
-                          <td className="p-3">{m.to}</td>
-                          <td className="p-3 text-slate-500">{m.responsible}</td>
+                          <td className="p-3 text-slate-600">{m.to}</td>
+                          <td className="p-3 text-xs">{m.returnDate ? m.returnDate.split('-').reverse().join('/') : '-'}</td>
+                          <td className="p-3 text-xs text-slate-500 truncate max-w-[150px]" title={m.observations}>{m.observations || '-'}</td>
                         </tr>
                       ))}
                     </tbody>
