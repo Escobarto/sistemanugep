@@ -328,7 +328,15 @@ export default function NugepSys() {
     <div className="flex h-screen bg-slate-50 font-sans text-slate-900">
       <style>{printStyles}</style>
       
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} currentUser={currentUser} onLogout={() => window.location.reload()} resetForm={handleResetForm} />
+      {/* Sidebar agora recebe 'navigateToAdd' para preservar a lógica do botão 'Cadastrar'.
+      */}
+      <Sidebar 
+        activeTab={activeTab} 
+        setActiveTab={setActiveTab} 
+        currentUser={currentUser} 
+        onLogout={() => window.location.reload()} 
+        navigateToAdd={() => { setActiveTab('add'); setIsEditing(false); setNewArtifact(initialArtifactState); }} 
+      />
 
       <main className="flex-1 overflow-y-auto flex flex-col relative bg-slate-50">
         <header className="bg-white border-b border-slate-200 px-8 py-4 flex justify-between items-center sticky top-0 z-10 shadow-sm no-print">
