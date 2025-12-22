@@ -83,11 +83,6 @@ REGRAS
 
 
 
-
-
-
-
-
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   LayoutDashboard, BookOpen, PlusCircle, Search, Settings, Landmark, 
@@ -105,7 +100,7 @@ import {
 import { initializeApp } from 'firebase/app';
 import { 
   getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, 
-  onSnapshot, query, orderBy, serverTimestamp 
+  onSnapshot, query, orderBy, serverTimestamp, setDoc, getDoc 
 } from 'firebase/firestore';
 import { 
   getAuth, signInAnonymously, signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithCustomToken, onAuthStateChanged 
@@ -131,8 +126,6 @@ const db = getFirestore(app);
 const appId = 'nugep-oficial'; 
 
 // --- Configuração da API do Gemini (IA) ---
-// CORREÇÃO: Tenta ler do .env (Vercel) ou usa string vazia.
-// Você deve configurar 'VITE_GEMINI_API_KEY' nas variáveis de ambiente do Vercel.
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY || ""; 
 
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
@@ -156,7 +149,6 @@ const printStyles = `
 // --- Componente de Login ---
 const LoginScreen = ({ onLogin }) => {
   const [authMode, setAuthMode] = useState('login'); 
-  // AJUSTE: O formData agora foca em 'email' para o login
   const [formData, setFormData] = useState({ 
     username: '', password: '', email: '', regName: '', regPassword: '', accessCode: '' 
   });
@@ -165,26 +157,18 @@ const LoginScreen = ({ onLogin }) => {
 
   const handleChange = (e) => { setFormData({ ...formData, [e.target.name]: e.target.value }); setError(''); };
 
-  // --- LÓGICA DE LOGIN REAL AJUSTADA ---
   const handleLogin = async (e) => { 
     e.preventDefault();
     setIsLoading(true); 
     
     try {
-      // 1. Tenta login REAL no Firebase (Valida no servidor do Google)
       const userCredential = await signInWithEmailAndPassword(auth, formData.email, formData.password);
       const user = userCredential.user;
-
-      // --- AJUSTE AQUI: Lógica de Permissão do Frontend ---
       
-      // Lista de emails que são Admins (Copie os mesmos do Firebase)
       const adminEmails = ['guilhermemescobar@gmail.com', 'admin@nugep.com', 'diretoria@museu.com'];
-      
-      // Verifica: O email tem 'admin' no texto OU está na lista VIP?
       const isAdmin = formData.email.includes('admin') || adminEmails.includes(formData.email);
       
       const role = isAdmin ? 'Administrador' : 'Usuário'; 
-      // ---------------------------------------------------
       
       onLogin({ 
         name: user.email, 
@@ -203,7 +187,6 @@ const LoginScreen = ({ onLogin }) => {
   const handleRegister = async (e) => {
     e.preventDefault();
     
-    // Validações Básicas
     if (!formData.regName || !formData.email || !formData.regPassword || !formData.accessCode) { 
       setError('Todos os campos são obrigatórios.'); 
       return; 
@@ -214,7 +197,6 @@ const LoginScreen = ({ onLogin }) => {
       return;
     }
 
-    // Validação do Código da Instituição (Segurança extra)
     if (formData.accessCode !== INSTITUTION_ACCESS_CODE) {
         setError('Código de Acesso Institucional incorreto. Solicite à chefia.');
         return;
@@ -223,15 +205,11 @@ const LoginScreen = ({ onLogin }) => {
     setIsLoading(true);
 
     try {
-      // --- CRIAÇÃO REAL NO FIREBASE ---
       const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.regPassword);
       const user = userCredential.user;
 
-      // Opcional: Aqui você poderia salvar o nome (regName) no perfil do usuário ou no banco de dados
-      
-      // Loga o usuário automaticamente no App após criar
       onLogin({ 
-          name: formData.regName, // Usamos o nome digitado para exibição imediata
+          name: formData.regName, 
           role: 'Usuário', 
           uid: user.uid,
           loginTime: new Date(), 
@@ -272,7 +250,6 @@ const LoginScreen = ({ onLogin }) => {
           {authMode === 'login' && (
             <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
               <form onSubmit={handleLogin} className="space-y-4">
-                {/* AJUSTE: Input de Email configurado corretamente */}
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                   <input 
@@ -351,6 +328,15 @@ export default function NugepSys() {
   const [artifacts, setArtifacts] = useState([]);
   const [locations, setLocations] = useState([]); // NOVO ESTADO PARA LOCAIS/SETORES
 
+  // --- NOVO: ESTADOS DE CONFIGURAÇÃO PÚBLICA ---
+  const [publicSettings, setPublicSettings] = useState({
+    showLocation: false,
+    showProvenance: false,
+    showRegNumber: false,
+    showCondition: false,
+    showAcquisition: false
+  });
+
   const [selectedArtifact, setSelectedArtifact] = useState(null);
   const [detailTab, setDetailTab] = useState('geral');
   const fileInputRef = useRef(null); 
@@ -400,11 +386,23 @@ export default function NugepSys() {
     
     // Limpa o listener ao desmontar
     return () => unsubscribe();
-  }, []); // <--- Verifique se esta linha está exatamente assim
+  }, []); 
 
   // 2. Escutar Coleções do Firestore (Só roda após auth)
   useEffect(() => {
     if (!firebaseUser) return;
+
+    // --- NOVO: Carregar Configurações de Privacidade ---
+    const loadSettings = async () => {
+        try {
+            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings_visibility');
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+                setPublicSettings(docSnap.data());
+            }
+        } catch (e) { console.error("Erro config", e); }
+    };
+    loadSettings();
 
     // Listener de Artefatos
     const unsubArtifacts = onSnapshot(
@@ -477,6 +475,18 @@ export default function NugepSys() {
             details 
         });
     } catch (e) { console.error("Erro ao salvar log", e); }
+  };
+
+  // --- NOVO: Função para Salvar Configurações Públicas ---
+  const handleSaveSettings = async () => {
+    try {
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings_visibility'), publicSettings);
+        addLog("CONFIG", "Atualizou as configurações de privacidade da Galeria Pública");
+        alert("Configurações da Galeria Pública atualizadas!");
+    } catch (e) {
+        alert("Erro ao salvar configurações.");
+        console.error(e);
+    }
   };
 
   const handleUserLogin = (user) => { 
@@ -1054,7 +1064,6 @@ export default function NugepSys() {
           <button onClick={() => setActiveTab('collection')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'collection' ? 'bg-green-700 text-white shadow-md' : 'hover:bg-green-900/50 hover:text-white'}`}>
             <BookOpen size={18} className={activeTab === 'collection' ? "text-white" : "text-green-500"}/> <span className="text-sm font-medium">Acervo</span>
           </button>
-          {/* NOVA ABA DE ESPAÇOS */}
           <button onClick={() => setActiveTab('spaces')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'spaces' ? 'bg-purple-700 text-white shadow-md' : 'hover:bg-purple-900/50 hover:text-white'}`}>
             <Box size={18} className={activeTab === 'spaces' ? "text-white" : "text-purple-400"}/> <span className="text-sm font-medium">Espaços & Inventário</span>
           </button>
@@ -1078,6 +1087,10 @@ export default function NugepSys() {
           <button onClick={() => setActiveTab('audit')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'audit' ? 'bg-slate-700 text-white shadow-md' : 'hover:bg-slate-800 hover:text-white'}`}>
             <History size={18} className={activeTab === 'audit' ? "text-white" : "text-slate-400"}/> <span className="text-sm font-medium">Auditoria</span>
           </button>
+          {/* NOVA ABA: CONFIGURAÇÕES DE PRIVACIDADE */}
+          <button onClick={() => setActiveTab('settings')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeTab === 'settings' ? 'bg-slate-700 text-white shadow-md' : 'hover:bg-slate-800 hover:text-white'}`}>
+            <ShieldCheck size={18} className={activeTab === 'settings' ? "text-white" : "text-slate-400"}/> <span className="text-sm font-medium">Privacidade & Web</span>
+          </button>
         </nav>
         <div className="p-4 border-t border-slate-800 bg-slate-950/30">
           <div className="flex items-center gap-3 mb-3 px-1">
@@ -1100,6 +1113,7 @@ export default function NugepSys() {
             {activeTab === 'movements' && <><Truck className="text-yellow-600"/> Gestão de Movimentações</>}
             {activeTab === 'conservation' && <><Stethoscope className="text-red-600"/> Laboratório de Conservação</>}
             {activeTab === 'analysis' && <><Sparkles className="text-indigo-500"/> Inteligência de Dados</>}
+            {activeTab === 'settings' && <><ShieldCheck className="text-slate-600"/> Privacidade da Galeria</>}
           </h1>
           <div className="flex items-center gap-2 text-xs font-medium text-slate-500 bg-slate-100 px-3 py-1.5 rounded-full">
             <ShieldCheck size={14} className="text-green-600" /> Ambiente Seguro - Cloud
@@ -1706,6 +1720,70 @@ export default function NugepSys() {
                   </tbody>
                 </table>
               </div>
+            </div>
+          )}
+
+          {/* NOVA ABA: CONFIGURAÇÕES DE PRIVACIDADE */}
+          {activeTab === 'settings' && (
+            <div className="max-w-2xl mx-auto bg-white rounded-xl shadow-sm border border-slate-200 p-8 animate-in fade-in">
+                <div className="flex items-center gap-4 mb-6 border-b pb-4">
+                    <div className="bg-indigo-100 p-3 rounded-full text-indigo-600"><ShieldCheck size={24}/></div>
+                    <div>
+                        <h2 className="text-2xl font-bold text-slate-800">Privacidade da Galeria Pública</h2>
+                        <p className="text-sm text-slate-500">Defina quais informações aparecem para visitantes no site externo.</p>
+                    </div>
+                </div>
+
+                <div className="space-y-6">
+                    <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                        <h3 className="font-bold text-slate-700 mb-4 flex items-center gap-2">Campos Visíveis ao Público</h3>
+                        
+                        <div className="space-y-4">
+                            <label className="flex items-center justify-between p-3 bg-white border rounded-lg cursor-pointer hover:border-indigo-300 transition-colors">
+                                <span className="flex flex-col">
+                                    <span className="font-bold text-slate-700">Mostrar Localização Atual</span>
+                                    <span className="text-xs text-slate-500">Ex: "Reserva Técnica A", "Galeria 1". (Desative para segurança)</span>
+                                </span>
+                                <input type="checkbox" className="accent-indigo-600 w-5 h-5" checked={publicSettings.showLocation} onChange={(e) => setPublicSettings({...publicSettings, showLocation: e.target.checked})} />
+                            </label>
+
+                            <label className="flex items-center justify-between p-3 bg-white border rounded-lg cursor-pointer hover:border-indigo-300 transition-colors">
+                                <span className="flex flex-col">
+                                    <span className="font-bold text-slate-700">Mostrar Histórico de Procedência</span>
+                                    <span className="text-xs text-slate-500">Ex: "Doado por Família X". (Pode conter dados sensíveis)</span>
+                                </span>
+                                <input type="checkbox" className="accent-indigo-600 w-5 h-5" checked={publicSettings.showProvenance} onChange={(e) => setPublicSettings({...publicSettings, showProvenance: e.target.checked})} />
+                            </label>
+
+                            <label className="flex items-center justify-between p-3 bg-white border rounded-lg cursor-pointer hover:border-indigo-300 transition-colors">
+                                <span className="flex flex-col">
+                                    <span className="font-bold text-slate-700">Mostrar Número de Registro</span>
+                                    <span className="text-xs text-slate-500">Ex: "PINT-2024-001". Útil para pesquisadores.</span>
+                                </span>
+                                <input type="checkbox" className="accent-indigo-600 w-5 h-5" checked={publicSettings.showRegNumber} onChange={(e) => setPublicSettings({...publicSettings, showRegNumber: e.target.checked})} />
+                            </label>
+
+                            <label className="flex items-center justify-between p-3 bg-white border rounded-lg cursor-pointer hover:border-indigo-300 transition-colors">
+                                <span className="flex flex-col">
+                                    <span className="font-bold text-slate-700">Mostrar Estado de Conservação</span>
+                                    <span className="text-xs text-slate-500">Ex: "Bom", "Ruim".</span>
+                                </span>
+                                <input type="checkbox" className="accent-indigo-600 w-5 h-5" checked={publicSettings.showCondition} onChange={(e) => setPublicSettings({...publicSettings, showCondition: e.target.checked})} />
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                        <p className="text-xs text-yellow-800 flex items-center gap-2">
+                            <AlertTriangle size={14}/> 
+                            <b>Nota:</b> As alterações podem levar alguns minutos para refletir no site público devido ao cache.
+                        </p>
+                    </div>
+
+                    <button onClick={handleSaveSettings} className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-lg shadow-indigo-200 transition-colors flex items-center justify-center gap-2">
+                        <ShieldCheck size={18}/> Salvar Configurações de Privacidade
+                    </button>
+                </div>
             </div>
           )}
 
