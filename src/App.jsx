@@ -261,7 +261,16 @@ export default function NugepSys() {
 
   // Estados Movimentação
   const [isMovementModalOpen, setIsMovementModalOpen] = useState(false);
-  const [newMovement, setNewMovement] = useState({ artifactId: '', type: 'Trânsito Interno', from: '', to: '', responsible: '', date: new Date().toISOString().slice(0,10) });
+  // --- ATUALIZAÇÃO 1: Novo estado com returnDate ---
+  const [newMovement, setNewMovement] = useState({ 
+    artifactId: '', 
+    type: 'Trânsito Interno', 
+    from: '', 
+    to: '', 
+    responsible: '', 
+    date: new Date().toISOString().slice(0,10),
+    returnDate: '' // <--- NOVO CAMPO ADICIONADO
+  });
 
   // Estados Conservação
   const [selectedForConservation, setSelectedForConservation] = useState([]);
@@ -666,7 +675,7 @@ export default function NugepSys() {
     addLog("EXPOSICAO", `Removeu obra ${art.regNumber} da exposição ${exhibitionName || 'Atual'}`);
   };
 
-  // --- LÓGICA DE MOVIMENTAÇÃO ---
+  // --- ATUALIZAÇÃO 2: LÓGICA DE MOVIMENTAÇÃO ATUALIZADA COM PRAZOS ---
   const handleRegisterMovement = async (e) => {
     e.preventDefault();
     if (!newMovement.artifactId) return alert("Selecione uma obra.");
@@ -677,47 +686,58 @@ export default function NugepSys() {
     let newLocation = art.location;
     let newStatus = art.status;
     const dest = newMovement.to;
+    
+    // Variável para controlar o prazo no objeto principal da obra
+    let updateReturnDate = art.currentReturnDate || null; 
 
     switch (newMovement.type) {
         case 'Trânsito Interno':
-        if (dest) newLocation = dest;
-        break;
+          if (dest) newLocation = dest;
+          break;
         case 'Empréstimo (Saída)':
         case 'Saída': 
-        newLocation = 'Externo'; 
-        newStatus = 'Empréstimo'; 
-        break;
+          newLocation = 'Externo'; 
+          newStatus = 'Empréstimo';
+          // Se tiver data definida no form, salva. Se não, deixa null.
+          updateReturnDate = newMovement.returnDate || null; 
+          break;
         case 'Empréstimo (Entrada)':
         case 'Entrada': 
-        if (dest) newLocation = dest;
-        newStatus = 'Armazenado'; 
-        break;
+          if (dest) newLocation = dest;
+          newStatus = 'Armazenado'; 
+          updateReturnDate = null; // Limpa o prazo pois a obra voltou
+          break;
         case 'Saída para Restauro':
-        newLocation = 'Laboratório de Restauro'; 
-        newStatus = 'Em Restauração';
-        if (dest) newLocation = dest; 
-        break;
+          newLocation = 'Laboratório de Restauro'; 
+          newStatus = 'Em Restauração';
+          if (dest) newLocation = dest; 
+          updateReturnDate = newMovement.returnDate || null; // Define prazo do restauro
+          break;
         case 'Retorno de Restauro':
-        if (dest) newLocation = dest;
-        newStatus = 'Armazenado'; 
-        break;
+          if (dest) newLocation = dest;
+          newStatus = 'Armazenado'; 
+          updateReturnDate = null; // Limpa o prazo
+          break;
         default:
-        if (dest) newLocation = dest;
-        break;
+          if (dest) newLocation = dest;
+          break;
     }
 
+    // Adiciona a data de retorno prevista ao histórico também, para registro
     const movementRecord = { ...newMovement, to: newLocation };
     const updatedMovements = [movementRecord, ...(art.movements || [])];
 
     await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'collection_items', art.id), {
         location: newLocation,
         status: newStatus,
-        movements: updatedMovements
+        movements: updatedMovements,
+        currentReturnDate: updateReturnDate // Atualiza o campo de controle de prazo
     });
 
     addLog("MOVIMENTACAO", `${newMovement.type} da obra ID ${art.regNumber}`);
     setIsMovementModalOpen(false);
-    setNewMovement({ artifactId: '', type: 'Trânsito Interno', from: '', to: '', responsible: '', date: new Date().toISOString().slice(0,10) });
+    // Reinicia o form
+    setNewMovement({ artifactId: '', type: 'Trânsito Interno', from: '', to: '', responsible: '', date: new Date().toISOString().slice(0,10), returnDate: '' });
     alert("Movimentação registrada com sucesso.");
   };
 
@@ -1435,9 +1455,49 @@ export default function NugepSys() {
             </div>
           )}
 
-          {/* MOVIMENTAÇÕES - Funcional */}
+          {/* ATUALIZAÇÃO 3: MOVIMENTAÇÕES E PRAZOS (NOVO PAINEL DE ALERTAS) */}
           {activeTab === 'movements' && (
             <div className="space-y-6">
+              
+              {/* Painel de Alertas de Prazos (NOVO) */}
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-6">
+                 <div className="p-4 bg-orange-50 border-b border-orange-100 flex justify-between items-center">
+                    <h3 className="font-bold text-orange-800 flex items-center gap-2"><Calendar size={18}/> Controle de Prazos & Devoluções</h3>
+                 </div>
+                 <div className="p-4">
+                    {artifacts.filter(a => a.currentReturnDate).length === 0 ? (
+                        <p className="text-sm text-slate-400 italic">Nenhuma obra com pendência de retorno ou prazo ativo.</p>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {artifacts.filter(a => a.currentReturnDate).sort((a,b) => new Date(a.currentReturnDate) - new Date(b.currentReturnDate)).map(art => {
+                                const today = new Date();
+                                const deadline = new Date(art.currentReturnDate);
+                                const diffTime = deadline - today;
+                                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+                                
+                                let statusColor = "bg-green-100 text-green-800 border-green-200";
+                                let statusText = "No Prazo";
+                                if (diffDays < 0) { statusColor = "bg-red-100 text-red-800 border-red-200"; statusText = "ATRASADO"; }
+                                else if (diffDays <= 7) { statusColor = "bg-yellow-100 text-yellow-800 border-yellow-200"; statusText = "Vence em breve"; }
+
+                                return (
+                                    <div key={art.id} className={`border rounded-lg p-3 flex justify-between items-start ${diffDays < 0 ? 'border-red-300 bg-red-50' : 'bg-white border-slate-200'}`}>
+                                        <div>
+                                            <p className="font-bold text-slate-700 text-sm">{art.title}</p>
+                                            <p className="text-xs text-slate-500 mb-2">{art.regNumber} • {art.status}</p>
+                                            <p className="text-xs font-bold flex items-center gap-1"><Calendar size={12}/> Retorno: {new Date(art.currentReturnDate).toLocaleDateString('pt-BR')}</p>
+                                        </div>
+                                        <div className={`px-2 py-1 rounded text-[10px] font-bold uppercase border ${statusColor}`}>
+                                            {statusText} ({diffDays} dias)
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    )}
+                 </div>
+              </div>
+
               {!isMovementModalOpen ? (
                 <div className="bg-yellow-50 border border-yellow-200 p-6 rounded-xl flex items-start justify-between shadow-sm">
                   <div className="flex items-start gap-4">
@@ -1477,12 +1537,21 @@ export default function NugepSys() {
                         </select>
                       </div>
                     </div>
+                    
+                    {/* CAMPO DE DATA DE RETORNO (CONDICIONAL) */}
+                    {(newMovement.type.includes('Saída') || newMovement.type.includes('Empréstimo (Saída)')) && (
+                        <div className="bg-orange-50 p-3 rounded border border-orange-100">
+                             <label className="block text-sm font-bold text-orange-800 mb-1 flex items-center gap-2"><Calendar size={14}/> Previsão de Retorno (Opcional)</label>
+                             <input type="date" className="w-full border p-2 rounded bg-white text-sm" value={newMovement.returnDate} onChange={e => setNewMovement({...newMovement, returnDate: e.target.value})}/>
+                             <p className="text-[10px] text-orange-600 mt-1">Definir uma data criará um alerta automático de vencimento.</p>
+                        </div>
+                    )}
+
                     <div className="grid grid-cols-3 gap-4">
-                      <div><label className="block text-sm font-bold text-slate-700 mb-1">Data</label><input type="date" className="w-full border p-2 rounded" value={newMovement.date} onChange={e => setNewMovement({...newMovement, date: e.target.value})}/></div>
+                      <div><label className="block text-sm font-bold text-slate-700 mb-1">Data do Movimento</label><input type="date" className="w-full border p-2 rounded" value={newMovement.date} onChange={e => setNewMovement({...newMovement, date: e.target.value})}/></div>
                       <div><label className="block text-sm font-bold text-slate-700 mb-1">Origem (Atual)</label><input disabled className="w-full border p-2 rounded bg-slate-100" value={newMovement.artifactId ? artifacts.find(a=>a.id==newMovement.artifactId)?.location : ''} /></div>
                       <div>
                           <label className="block text-sm font-bold text-slate-700 mb-1">Destino</label>
-                          {/* SELEÇÃO DINÂMICA DE DESTINO */}
                           <input list="locations-list" className="w-full border p-2 rounded" placeholder="Selecione ou digite..." value={newMovement.to} onChange={e => setNewMovement({...newMovement, to: e.target.value})}/>
                           <datalist id="locations-list">
                               {locations.map(l => <option key={l.id} value={l.name}/>)}
